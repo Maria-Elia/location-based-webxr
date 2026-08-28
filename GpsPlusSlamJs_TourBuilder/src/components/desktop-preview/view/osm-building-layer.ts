@@ -30,7 +30,9 @@ import {
   buildRoads,
   buildAreaPlates,
   cellToBoundingBox,
+  featureKey,
   DEFAULT_ROAD_RGB,
+  type BoundingBox,
   type MeshData,
   type OsmDataSource,
   type OsmFeature,
@@ -72,12 +74,59 @@ const PLATE_Y_OFFSET_M = -0.01;
  * Shared by buildings and roads: both `BuildingVolume` and `RoadRibbon` carry
  * a `mesh: MeshData` in the same positions/normals/indices shape.
  */
+/**
+ * One `FETCH_RES` tile per point that needs covering (the origin plus every
+ * `route` point), deduped by cell id — see `load()`'s comment for why this
+ * replaces a fixed-radius disk around the origin alone.
+ */
+function tilesToFetch(
+  origin: { readonly lat: number; readonly lng: number },
+  route: readonly { readonly lat: number; readonly lon: number }[],
+): string[] {
+  const cellIds = new Set<string>([
+    latLngToCell(origin.lat, origin.lng, FETCH_RES),
+  ]);
+  for (const point of route) {
+    cellIds.add(latLngToCell(point.lat, point.lon, FETCH_RES));
+  }
+  return [...cellIds];
+}
+
+/**
+ * Adjacent tiles' fetch bboxes overlap on purpose (`cellToBoundingBox`'s
+ * doc), so a feature straddling two tiles comes back once per tile fetched.
+ * Dedup by OSM id before building meshes — otherwise it would be
+ * extruded/ribboned/plated once per tile, overlapping itself.
+ */
+function dedupeFeatures(
+  results: readonly { readonly features: readonly OsmFeature[] }[],
+): OsmFeature[] {
+  const seen = new Set<string>();
+  const features: OsmFeature[] = [];
+  for (const result of results) {
+    for (const feature of result.features) {
+      const key = featureKey(feature);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      features.push(feature);
+    }
+  }
+  return features;
+}
+
+/** Smallest bbox containing every input bbox. `boxes` is always non-empty here (at least the origin's own tile). */
+function unionBoundingBoxes(boxes: readonly BoundingBox[]): BoundingBox {
+  return boxes.reduce((acc, box) => ({
+    south: Math.min(acc.south, box.south),
+    west: Math.min(acc.west, box.west),
+    north: Math.max(acc.north, box.north),
+    east: Math.max(acc.east, box.east),
+  }));
+}
+
 function toMesh(meshData: MeshData, color: number): Mesh {
   const geometry = new BufferGeometry();
-  geometry.setAttribute(
-    "position",
-    new BufferAttribute(meshData.positions, 3),
-  );
+  geometry.setAttribute("position", new BufferAttribute(meshData.positions, 3));
   geometry.setAttribute("normal", new BufferAttribute(meshData.normals, 3));
   geometry.setIndex(new BufferAttribute(meshData.indices, 1));
   // A single plain material per layer — no per-feature colouring yet.
@@ -86,14 +135,22 @@ function toMesh(meshData: MeshData, color: number): Mesh {
 }
 
 /**
- * The GUARANTEE, not a fetch parameter any more (see `load()`'s comment on
- * why a radius-driven multi-tile fetch was dropped, 2026-08-28). A single
- * `FETCH_RES` (7) H3 tile has a ~1406 m edge (h3-js
+ * The GUARANTEE around the origin, not a fetch parameter (see `load()`'s
+ * comment on why a radius-driven multi-tile disk fetch was dropped,
+ * 2026-08-28). A single `FETCH_RES` (7) H3 tile has a ~1406 m edge (h3-js
  * `getHexagonEdgeLengthAvg(7, "m")`), so fetching just the tile that
  * contains the origin already covers at least this radius on every side —
  * comfortably, since 1406 m >> 300 m. Kept as a named, tested constant so
  * that guarantee stays visible and machine-checked rather than an
  * unexplained "one tile is enough" assumption.
+ *
+ * This is a floor, not a ceiling: `load()` also fetches one tile per
+ * `options.route` point (deduped), so a tour whose breadcrumb/walk actually
+ * extends past this radius — a real hexagon is not a circle, and a tour is
+ * not always short and centred on its own origin — still gets buildings
+ * along its whole length, not just near the start (2026-08-28, "range too
+ * small" — a ~950m route with two turns walked out of the origin's own
+ * tile).
  */
 export const DEFAULT_OSM_BUILDING_RADIUS_M = 300;
 
@@ -118,6 +175,15 @@ const OSM_BUILDING_USER_AGENT =
 export interface OsmBuildingLayerOptions {
   /** The tour's origin. TourBuilder's own `lat`/`lon` shape (not `lng`). */
   readonly origin: { readonly lat: number; readonly lon: number };
+  /**
+   * Extra points the fetch must also cover — typically the tour's breadcrumb
+   * (`PreviewSessionOptions.route`). Each point contributes its own
+   * `FETCH_RES` tile (deduped against the origin's and each other's); a
+   * short tour centred on its origin adds nothing beyond the single-tile
+   * floor above, a long or bendy one gets as many tiles as it actually
+   * spans. Omitted/empty ⇒ unchanged single-tile behaviour.
+   */
+  readonly route?: readonly { readonly lat: number; readonly lon: number }[];
   readonly timeoutMs?: number;
   /** Test seam. Defaults to a real `OverpassSource`. */
   readonly source?: OsmDataSource;
@@ -166,21 +232,21 @@ export function createOsmBuildingLayer(
   async function load(): Promise<void> {
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      // A single FETCH_RES tile (~1406m edge, see DEFAULT_OSM_BUILDING_RADIUS_M's
-      // doc) already covers this well beyond a 300m preview radius. Deliberately
-      // NOT ensureAreaLoaded(origin, radiusM, ...): that always rounds any
-      // non-zero radius up to a full 1-ring (7-tile) disk (`tilesWithin`'s
-      // `Math.ceil`), which fired 7 sequential Overpass requests per preview
-      // session — measured 86s end to end, and repeated dev-server reloads
-      // tripped public Overpass's per-client rate limit (429s). One tile is a
-      // ~7x cut in request volume for the same effective coverage.
-      const tile = latLngToCell(origin.lat, origin.lng, FETCH_RES);
-      const { loaded } = await loadTiles(source, [tile], {
+      // Deliberately NOT ensureAreaLoaded(origin, radiusM, ...): that always
+      // rounds any non-zero radius up to a full 1-ring (7-tile) disk around
+      // the ORIGIN alone (`tilesWithin`'s `Math.ceil`) — expensive even for a
+      // short tour, and still blind to a tour that walks out of that disk
+      // anyway. Fetching exactly the tiles the route touches scales with the
+      // tour's actual size/shape instead of a fixed guess in either
+      // direction.
+      const tiles = tilesToFetch(origin, options.route ?? []);
+      const { loaded } = await loadTiles(source, tiles, {
         signal: controller.signal,
       });
       if (disposed) return;
 
-      const features: OsmFeature[] = loaded.flatMap((result) => result.features);
+      const features = dedupeFeatures(loaded);
+
       const frame = enuFrameAt(origin);
       const volumes = buildBuildings(features, { frame });
       for (const volume of volumes) {
@@ -192,14 +258,14 @@ export function createOsmBuildingLayer(
       for (const road of roads) {
         group.add(toMesh(road.mesh, DEFAULT_ROAD_RGB));
       }
-      // Also free, same reasoning. `clipTo` is the exact bbox of the one
-      // tile fetched: triangulation is O(n²) in ring size (plates.ts), and
-      // clipping to what was actually fetched keeps a landuse polygon that
-      // extends beyond the tile from costing more than the tile's worth.
+      // Also free, same reasoning. `clipTo` is the union bbox of every tile
+      // actually fetched: triangulation is O(n²) in ring size (plates.ts),
+      // and clipping to what was fetched keeps a landuse polygon that
+      // extends beyond it from costing more than the fetched tiles' worth.
       const plates = buildAreaPlates(features, {
         frame,
         groundHeightM: () => PLATE_Y_OFFSET_M,
-        clipTo: cellToBoundingBox(tile),
+        clipTo: unionBoundingBoxes(tiles.map(cellToBoundingBox)),
       });
       for (const plate of plates) {
         group.add(toMesh(plate.mesh, PLATE_RGB));

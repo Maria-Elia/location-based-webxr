@@ -704,7 +704,7 @@ importers:
         version: link:../GpsPlusSlamJs_Osm
       h3-js:
         specifier: ^4.4.0
-        version: 4.4.0
+        version: 4.5.0
       leaflet:
         specifier: ^1.9.4
         version: 1.9.4

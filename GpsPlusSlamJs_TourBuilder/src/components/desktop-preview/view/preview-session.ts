@@ -235,13 +235,17 @@ export function createPreviewSession(
   // ── The world ─────────────────────────────────────────────────────────────
   const { scene, camera, arWorldGroup } = buildWorld();
 
-  // Real OSM buildings, fetched once around the tour's origin — desktop
-  // preview only, see osm-building-layer.ts. Added to the scene root
-  // (fixed geographic content), never to arWorldGroup. Empty until (and
-  // unless) `load()` finds anything; the flat ground/sky/fog above is the
-  // permanent fallback, not replaced by this.
+  // Real OSM buildings, fetched once around the tour's origin AND its whole
+  // breadcrumb — desktop preview only, see osm-building-layer.ts. Added to
+  // the scene root (fixed geographic content), never to arWorldGroup. Empty
+  // until (and unless) `load()` finds anything; the flat ground/sky/fog
+  // above is the permanent fallback, not replaced by this.
   const osmBuildings =
-    options.osmBuildings ?? createOsmBuildingLayer({ origin: options.origin });
+    options.osmBuildings ??
+    createOsmBuildingLayer({
+      origin: options.origin,
+      ...(options.route ? { route: options.route } : {}),
+    });
   scene.add(osmBuildings.group);
   void osmBuildings.load();
 

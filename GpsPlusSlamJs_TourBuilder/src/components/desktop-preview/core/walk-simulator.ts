@@ -55,7 +55,7 @@ export function createWalkSimulator(
   options: WalkSimulatorOptions = {},
 ): WalkSimulator {
   const walkSpeed = options.walkSpeedMps ?? 3.0;
-  const runMultiplier = options.runMultiplier ?? 2.2;
+  const runMultiplier = options.runMultiplier ?? 5.2;
   const turnRate = options.turnRateRadPerSec ?? Math.PI * 0.9;
   let current: WalkPose = options.start ?? ORIGIN;
 

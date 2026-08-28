@@ -214,6 +214,76 @@ describe("createOsmBuildingLayer", () => {
     expect(layer.group.children).toHaveLength(0);
   });
 
+  it("fetches only the origin's tile when no route is given (unchanged default)", async () => {
+    const fetchedTiles: string[] = [];
+    const source: OsmDataSource = {
+      attribution: "test",
+      sourceId: "fake-spy",
+      fetchTile: (tile: string) => {
+        fetchedTiles.push(tile);
+        return Promise.resolve(tileResult([]));
+      },
+    };
+    const layer = createOsmBuildingLayer({ origin: ORIGIN, source });
+
+    await layer.load();
+
+    expect(fetchedTiles).toHaveLength(1);
+  });
+
+  it("fetches one extra tile per route point far enough to land outside the origin's tile", async () => {
+    const fetchedTiles: string[] = [];
+    const source: OsmDataSource = {
+      attribution: "test",
+      sourceId: "fake-spy",
+      fetchTile: (tile: string) => {
+        fetchedTiles.push(tile);
+        return Promise.resolve(tileResult([]));
+      },
+    };
+    // ~2.2km east of ORIGIN — well outside a single ~1406m-edge FETCH_RES
+    // tile, so this must land in a different tile.
+    const farRoutePoint = { lat: ORIGIN.lat, lon: ORIGIN.lon + 0.026 };
+    const layer = createOsmBuildingLayer({
+      origin: ORIGIN,
+      route: [ORIGIN, farRoutePoint],
+      source,
+    });
+
+    await layer.load();
+
+    expect(new Set(fetchedTiles).size).toBe(2);
+  });
+
+  it("dedupes a feature returned by more than one fetched tile into a single mesh", async () => {
+    const fetchedTiles: string[] = [];
+    const source: OsmDataSource = {
+      attribution: "test",
+      sourceId: "fake-spy",
+      fetchTile: (tile: string) => {
+        fetchedTiles.push(tile);
+        // Same feature id comes back from every tile — real Overpass tiles
+        // overlap at their edges, so a feature near a boundary is returned
+        // by both.
+        return Promise.resolve(tileResult([BUILDING_FEATURE]));
+      },
+    };
+    const farRoutePoint = { lat: ORIGIN.lat, lon: ORIGIN.lon + 0.026 };
+    const layer = createOsmBuildingLayer({
+      origin: ORIGIN,
+      route: [ORIGIN, farRoutePoint],
+      source,
+    });
+
+    await layer.load();
+
+    expect(new Set(fetchedTiles).size).toBe(2);
+    // Two tiles both returned BUILDING_FEATURE — deduped to one mesh.
+    expect(
+      layer.group.children.filter((child) => child instanceof Mesh),
+    ).toHaveLength(1);
+  });
+
   it("does not add meshes if disposed while a load was already in flight", async () => {
     let resolveTile!: (result: OsmTileResult) => void;
     const source: OsmDataSource = {

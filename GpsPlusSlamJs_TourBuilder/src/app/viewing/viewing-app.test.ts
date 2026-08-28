@@ -90,11 +90,7 @@ function fakeStorage(seed: Record<string, string> = {}): ProgressStorage {
 }
 
 type ControllerStatus =
-  | "checking"
-  | "unsupported"
-  | "ready"
-  | "error"
-  | "running";
+  "checking" | "unsupported" | "ready" | "error" | "running";
 
 function fakeController(
   options: {
