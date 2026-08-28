@@ -178,7 +178,8 @@
         <h1>Component 10 — Authoring tools demo</h1>
         <p>
           Pick <strong>Live GPS</strong> (real device) or
-          <strong>Replay a Task 1 walk</strong>. Click
+          <strong>Replay a recording</strong> — every recording zip in
+          <code>recordings/</code> is listed in the dropdown. Click
           <strong>Drop Waypoint</strong> as the position moves, attach files to
           a waypoint's model/sprite/audio slots, then
           <strong>Export &amp; Pack</strong> to produce a downloadable
@@ -196,9 +197,10 @@
             GPS</label
           >
           <label
-            ><input type="radio" name="mode" value="replay" /> Replay Task 1
-            walk</label
+            ><input type="radio" name="mode" value="replay" /> Replay a
+            recording</label
           >
+          <select id="recording-select"></select>
           <button id="play-pause">Play</button>
           <input id="scrub" type="range" min="0" value="0" />
         </div>

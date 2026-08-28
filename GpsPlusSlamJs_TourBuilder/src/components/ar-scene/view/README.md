@@ -27,6 +27,11 @@ Two policies that live here because they are THREE facts, not orchestration:
   swallow taps aimed past it — component 1's existing discipline.
 - **The fallback marker owns its own geometry** (nothing shares it), so unlike a
   clone it _is_ disposed on release.
+- **A breadcrumb-only stop (no image, no model) with a transcript skips the
+  marker.** `buildFallbackVisual`'s `showMarker` flag still builds the cone
+  mesh (uniform release/dispose bookkeeping) but leaves it detached and
+  invisible; `showTranscript`'s `centered` flag then places the text in the
+  visual's own slot (local X = 0) instead of beside a cone nobody would see.
 
 ### `gltf-loading.ts` — template vs instance
 

@@ -1,4 +1,5 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { replayRecording } from "gps-plus-slam-app-framework/state";
@@ -36,133 +37,144 @@ function toTourCoord(p: {
     : { lat: p.latitude, lon: p.longitude, altitude: p.altitude };
 }
 
-describe("authoring session replay e2e — real Task 1 walk", () => {
-  let path: TourCoord[];
+const recordingsDir = fileURLToPath(
+  new URL("../../../../recordings/", import.meta.url),
+);
+const recordingFiles = readdirSync(recordingsDir)
+  .filter((f) => f.endsWith(".zip"))
+  .sort();
 
-  beforeAll(async () => {
-    const zipPath = fileURLToPath(
-      new URL(
-        "../../../../recordings/2026-06-22_16-06-59utc.zip",
-        import.meta.url,
-      ),
-    );
-    const state = await replayRecording(new Uint8Array(readFileSync(zipPath)));
-    path = selectGpsPositions(state).map(toTourCoord);
-  });
+if (recordingFiles.length === 0) {
+  throw new Error(`No recording zips found in ${recordingsDir}`);
+}
 
-  it("has a real, non-trivial recorded path to replay", () => {
-    expect(path.length).toBeGreaterThan(10);
-  });
+describe.each(recordingFiles)(
+  "authoring session replay e2e — real Task 1 walk (%s)",
+  (filename) => {
+    let path: TourCoord[];
 
-  it("samples a breadcrumb trail where every consecutive pair is at least MIN_BREADCRUMB_DISTANCE_M apart", () => {
-    const initialDraft: AuthoringSliceState = {
-      name: "",
-      description: "",
-      assets: [],
-      waypoints: [],
-      breadcrumb: [],
-    };
-    let draft = initialDraft;
-    let capturedSource!: (pos: TourCoord) => void;
-    const positionSource: PositionSource = {
-      subscribe(onPosition) {
-        capturedSource = onPosition;
-        return () => undefined;
-      },
-    };
+    beforeAll(async () => {
+      const zipPath = join(recordingsDir, filename);
+      const state = await replayRecording(
+        new Uint8Array(readFileSync(zipPath)),
+      );
+      path = selectGpsPositions(state).map(toTourCoord);
+    }, 60_000);
 
-    createAuthoringSession({
-      positionSource,
-      dispatch: (action) => {
-        if (action.type === "authoring/addBreadcrumbPoint") {
-          draft = {
-            ...draft,
-            breadcrumb: [...draft.breadcrumb, action.payload],
-          };
-        }
-      },
-      getState: () => ({ authoring: draft }),
-      filesAssetProvider: createFilesAssetProvider({
-        createObjectUrl: () => "blob:fake",
-      }),
+    it("has a real, non-trivial recorded path to replay", () => {
+      expect(path.length).toBeGreaterThan(10);
     });
 
-    for (const pos of path) capturedSource(pos);
+    it("samples a breadcrumb trail where every consecutive pair is at least MIN_BREADCRUMB_DISTANCE_M apart", () => {
+      const initialDraft: AuthoringSliceState = {
+        name: "",
+        description: "",
+        assets: [],
+        waypoints: [],
+        breadcrumb: [],
+      };
+      let draft = initialDraft;
+      let capturedSource!: (pos: TourCoord) => void;
+      const positionSource: PositionSource = {
+        subscribe(onPosition) {
+          capturedSource = onPosition;
+          return () => undefined;
+        },
+      };
 
-    expect(draft.breadcrumb.length).toBeGreaterThan(1);
-    for (let i = 1; i < draft.breadcrumb.length; i++) {
-      const a = draft.breadcrumb[i - 1]!;
-      const b = draft.breadcrumb[i]!;
-      const d = approxDistanceMetres(a.lat, a.lon, b.lat, b.lon);
-      expect(d).toBeGreaterThanOrEqual(MIN_BREADCRUMB_DISTANCE_M);
-    }
-  });
+      createAuthoringSession({
+        positionSource,
+        dispatch: (action) => {
+          if (action.type === "authoring/addBreadcrumbPoint") {
+            draft = {
+              ...draft,
+              breadcrumb: [...draft.breadcrumb, action.payload],
+            };
+          }
+        },
+        getState: () => ({ authoring: draft }),
+        filesAssetProvider: createFilesAssetProvider({
+          createObjectUrl: () => "blob:fake",
+        }),
+      });
 
-  it("dropped waypoints land at the exact recorded position and the resulting export validates", () => {
-    const initialDraft: AuthoringSliceState = {
-      name: "Replay Test Tour",
-      description: "",
-      assets: [],
-      waypoints: [],
-      breadcrumb: [],
-    };
-    let draft = initialDraft;
-    let capturedSource!: (pos: TourCoord) => void;
-    const positionSource: PositionSource = {
-      subscribe(onPosition) {
-        capturedSource = onPosition;
-        return () => undefined;
-      },
-    };
+      for (const pos of path) capturedSource(pos);
 
-    const session = createAuthoringSession({
-      positionSource,
-      dispatch: (action) => {
-        if (action.type === "authoring/addBreadcrumbPoint") {
-          draft = {
-            ...draft,
-            breadcrumb: [...draft.breadcrumb, action.payload],
-          };
-        } else if (action.type === "authoring/addWaypoint") {
-          draft = {
-            ...draft,
-            waypoints: [
-              ...draft.waypoints,
-              {
-                id: action.payload.id,
-                position: action.payload.position,
-                prefetchRadius: 25,
-                activeRadius: 10,
-                content: {},
-              },
-            ],
-          };
-        }
-      },
-      getState: () => ({ authoring: draft }),
-      filesAssetProvider: createFilesAssetProvider({
-        createObjectUrl: () => "blob:fake",
-      }),
-    });
-
-    const dropIndices = [
-      Math.floor(path.length * 0.25),
-      Math.floor(path.length * 0.75),
-    ];
-    let nextDropIndex = 0;
-    path.forEach((pos, i) => {
-      capturedSource(pos);
-      if (i === dropIndices[nextDropIndex]) {
-        session.dropWaypoint();
-        nextDropIndex += 1;
+      expect(draft.breadcrumb.length).toBeGreaterThan(1);
+      for (let i = 1; i < draft.breadcrumb.length; i++) {
+        const a = draft.breadcrumb[i - 1]!;
+        const b = draft.breadcrumb[i]!;
+        const d = approxDistanceMetres(a.lat, a.lon, b.lat, b.lon);
+        expect(d).toBeGreaterThanOrEqual(MIN_BREADCRUMB_DISTANCE_M);
       }
     });
 
-    expect(draft.waypoints).toHaveLength(2);
-    expect(draft.waypoints[0]!.position).toEqual(path[dropIndices[0]!]);
-    expect(draft.waypoints[1]!.position).toEqual(path[dropIndices[1]!]);
+    it("dropped waypoints land at the exact recorded position and the resulting export validates", () => {
+      const initialDraft: AuthoringSliceState = {
+        name: "Replay Test Tour",
+        description: "",
+        assets: [],
+        waypoints: [],
+        breadcrumb: [],
+      };
+      let draft = initialDraft;
+      let capturedSource!: (pos: TourCoord) => void;
+      const positionSource: PositionSource = {
+        subscribe(onPosition) {
+          capturedSource = onPosition;
+          return () => undefined;
+        },
+      };
 
-    const { tour } = session.exportTour();
-    expect(tour.waypoints).toHaveLength(2);
-  });
-});
+      const session = createAuthoringSession({
+        positionSource,
+        dispatch: (action) => {
+          if (action.type === "authoring/addBreadcrumbPoint") {
+            draft = {
+              ...draft,
+              breadcrumb: [...draft.breadcrumb, action.payload],
+            };
+          } else if (action.type === "authoring/addWaypoint") {
+            draft = {
+              ...draft,
+              waypoints: [
+                ...draft.waypoints,
+                {
+                  id: action.payload.id,
+                  position: action.payload.position,
+                  prefetchRadius: 25,
+                  activeRadius: 10,
+                  content: {},
+                },
+              ],
+            };
+          }
+        },
+        getState: () => ({ authoring: draft }),
+        filesAssetProvider: createFilesAssetProvider({
+          createObjectUrl: () => "blob:fake",
+        }),
+      });
+
+      const dropIndices = [
+        Math.floor(path.length * 0.25),
+        Math.floor(path.length * 0.75),
+      ];
+      let nextDropIndex = 0;
+      path.forEach((pos, i) => {
+        capturedSource(pos);
+        if (i === dropIndices[nextDropIndex]) {
+          session.dropWaypoint();
+          nextDropIndex += 1;
+        }
+      });
+
+      expect(draft.waypoints).toHaveLength(2);
+      expect(draft.waypoints[0]!.position).toEqual(path[dropIndices[0]!]);
+      expect(draft.waypoints[1]!.position).toEqual(path[dropIndices[1]!]);
+
+      const { tour } = session.exportTour();
+      expect(tour.waypoints).toHaveLength(2);
+    });
+  },
+);

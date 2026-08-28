@@ -76,10 +76,14 @@ export function createVisualInstances(
       node: WaypointNode | undefined,
       handle: WaypointHandle,
       hasAudio = true,
+      showMarker = true,
     ): VisualHandle {
       if (node === undefined) return { visualId: `void-${nextVisualId++}` };
       // A plain marker cone: the visitor sees that SOMETHING is here and the
       // failure is diagnosable in the field instead of looking like empty space.
+      // Built even when `showMarker` is false (a breadcrumb-only stop whose
+      // transcript fills this slot instead) so release/dispose bookkeeping
+      // stays uniform — it's just never added to the scene graph.
       const marker = new Mesh(
         new ConeGeometry(0.25, 1, 8),
         new MeshBasicMaterial({ color: 0xff8a5c, wireframe: true }),
@@ -88,9 +92,11 @@ export function createVisualInstances(
       // room beneath a fallback marker too.
       marker.position.y = VISUAL_GROUND_CLEARANCE_M + 0.5;
       marker.visible = false;
-      stamp(marker, handle.waypointId, "visual");
-      node.group.add(marker);
-      node.visual = marker;
+      if (showMarker) {
+        stamp(marker, handle.waypointId, "visual");
+        node.group.add(marker);
+        node.visual = marker;
+      }
       if (hasAudio) ensureTransportPanel(node);
       const visualId = `fallback-${nextVisualId++}`;
       instances.set(visualId, { node, object: marker });

@@ -12,7 +12,7 @@
  */
 
 import { toPx } from "../../shared/canvas-panel.js";
-import { PAGE_PANEL_LAYOUT } from "./page-layout.js";
+import { computePagePanelLayout } from "./page-layout.js";
 import type { ResolvedTextStyle } from "./text-style.js";
 
 export interface PxRect {
@@ -59,7 +59,8 @@ export function describePanel(
   },
 ): PanelDrawModel {
   const { canvasW, canvasH } = style;
-  const textRect = toPx(PAGE_PANEL_LAYOUT.text, canvasW, canvasH);
+  const layout = computePagePanelLayout(style.planeH, style.floorPlaneH);
+  const textRect = toPx(layout.text, canvasW, canvasH);
   const lines: DrawLine[] = page.map((text, index) => ({
     text,
     xPx: textRect.x,
@@ -77,15 +78,15 @@ export function describePanel(
     fontFamily: style.fontFamily,
     lines,
     prev: {
-      rectPx: toPx(PAGE_PANEL_LAYOUT.prev, canvasW, canvasH),
+      rectPx: toPx(layout.prev, canvasW, canvasH),
       enabled: nav.canPrev,
     },
     next: {
-      rectPx: toPx(PAGE_PANEL_LAYOUT.next, canvasW, canvasH),
+      rectPx: toPx(layout.next, canvasW, canvasH),
       enabled: nav.canNext,
     },
     indicator: {
-      rectPx: toPx(PAGE_PANEL_LAYOUT.indicator, canvasW, canvasH),
+      rectPx: toPx(layout.indicator, canvasW, canvasH),
       text: nav.label,
     },
   };

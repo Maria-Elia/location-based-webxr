@@ -28,6 +28,7 @@ import {
 } from "../../shared/billboard-math.js";
 import { describePanel, type PanelDrawModel } from "../core/describe-panel.js";
 import {
+  computePagePanelLayout,
   hitToPageIntent,
   type PageIntent,
   paginate,
@@ -68,6 +69,8 @@ export interface InWorldTextOptions {
   readonly position: Vector3;
   readonly id?: string;
   readonly maxWidthMeters?: number;
+  /** Cap, in metres, on how tall the panel may grow to fit its text. */
+  readonly maxHeightMeters?: number;
   readonly style?: Partial<TextStyle>;
   /** 'canvas' forces the fallback; 'auto'/'html' try HTML with the runtime net. */
   readonly backend?: "auto" | "html" | "canvas";
@@ -100,22 +103,20 @@ const defaultSurfaceFactory: SurfaceFactory = (kind, deps) =>
   kind === "html" ? createHtmlTextSurface(deps) : createCanvasTextSurface(deps);
 
 export function createInWorldText(options: InWorldTextOptions): InWorldText {
-  const style = resolveStyle(options);
+  const styleInput = resolveStyleInput(options);
   const measure =
-    options.measure ?? createMeasure(style.fontPx, style.fontFamily);
+    options.measure ?? createMeasure(styleInput.fontPx, styleInput.fontFamily);
   const surfaceFactory = options.createSurface ?? defaultSurfaceFactory;
   const timeoutMs = options.htmlRenderTimeoutMs ?? DEFAULT_HTML_TIMEOUT_MS;
-  const deps = {
-    canvasW: style.canvasW,
-    canvasH: style.canvasH,
-    maxAnisotropy: options.maxAnisotropy ?? DEFAULT_MAX_ANISOTROPY,
-  };
+  const maxAnisotropy = options.maxAnisotropy ?? DEFAULT_MAX_ANISOTROPY;
   const id = options.id ?? `in-world-text-${++autoId}`;
 
-  let pages = repaginate(options.text, style, measure);
+  const sized = sizeAndWrap(options.text, styleInput, measure);
+  let style = sized.style;
+  let pages = sized.pages;
   let state = initialTextPageState(pages.length);
 
-  const geometry = new PlaneGeometry(style.planeW, style.planeH);
+  let geometry = new PlaneGeometry(style.planeW, style.planeH);
   const material = new MeshBasicMaterial({ transparent: true });
   const mesh = new Mesh(geometry, material);
   mesh.userData = { textLabelId: id } satisfies TextLabelUserData;
@@ -124,8 +125,30 @@ export function createInWorldText(options: InWorldTextOptions): InWorldText {
   group.add(mesh);
 
   let backend: SurfaceKind = options.backend === "canvas" ? "canvas" : "html";
+  let deps = { canvasW: style.canvasW, canvasH: style.canvasH, maxAnisotropy };
   let surface: TextSurface = surfaceFactory(backend, deps);
   material.map = surface.texture;
+
+  /** Rebuild the plane geometry + render surface if the resolved size changed. */
+  function applySize(newStyle: ResolvedTextStyle): void {
+    if (
+      newStyle.planeH === style.planeH &&
+      newStyle.canvasH === style.canvasH
+    ) {
+      style = newStyle;
+      return;
+    }
+    style = newStyle;
+    geometry.dispose();
+    geometry = new PlaneGeometry(style.planeW, style.planeH);
+    mesh.geometry = geometry;
+    deps = { canvasW: style.canvasW, canvasH: style.canvasH, maxAnisotropy };
+    const previous = surface;
+    surface = surfaceFactory(backend, deps);
+    material.map = surface.texture;
+    material.needsUpdate = true;
+    previous.dispose();
+  }
 
   function model(): PanelDrawModel {
     const page = pages[state.pageIndex] ?? [];
@@ -186,7 +209,9 @@ export function createInWorldText(options: InWorldTextOptions): InWorldText {
       refresh();
     },
     setText(text): void {
-      pages = repaginate(text, style, measure);
+      const result = sizeAndWrap(text, styleInput, measure);
+      applySize(result.style);
+      pages = result.pages;
       state = textPageReducer(state, {
         type: "setText",
         pageCount: pages.length,
@@ -194,10 +219,11 @@ export function createInWorldText(options: InWorldTextOptions): InWorldText {
       refresh();
     },
     hitTest(uv): PageIntent {
-      return hitToPageIntent(uv, {
-        canPrev: canPrev(state),
-        canNext: canNext(state),
-      });
+      return hitToPageIntent(
+        uv,
+        { canPrev: canPrev(state), canNext: canNext(state) },
+        computePagePanelLayout(style.planeH, style.floorPlaneH),
+      );
     },
     dispose(): void {
       surface.dispose();
@@ -210,24 +236,35 @@ export function createInWorldText(options: InWorldTextOptions): InWorldText {
   };
 }
 
-function resolveStyle(options: InWorldTextOptions): ResolvedTextStyle {
+function resolveStyleInput(options: InWorldTextOptions): TextStyle {
   const merged: TextStyle = { ...DEFAULT_TEXT_STYLE, ...options.style };
   const withWidth: TextStyle =
     options.maxWidthMeters !== undefined
       ? { ...merged, maxWidthMeters: options.maxWidthMeters }
       : merged;
-  return resolveTextStyle(withWidth);
+  return options.maxHeightMeters !== undefined
+    ? { ...withWidth, maxHeightMeters: options.maxHeightMeters }
+    : withWidth;
 }
 
-function repaginate(
+/**
+ * Wrap `text` once at the style's (height-independent) wrap width, then
+ * resolve the final sized style from the resulting line count — so a panel
+ * with `maxHeightMeters` set grows to fit its own text (see
+ * `resolveTextStyle`) before being paginated at that final size.
+ */
+function sizeAndWrap(
   text: string,
-  style: ResolvedTextStyle,
+  styleInput: TextStyle,
   measure: Measure,
-): string[][] {
-  return paginate(
-    wrapText(text, style.wrapWidthPx, measure),
-    style.maxLinesPerPage,
-  );
+): { style: ResolvedTextStyle; pages: string[][] } {
+  const widthOnly = resolveTextStyle(styleInput);
+  const lines = wrapText(text, widthOnly.wrapWidthPx, measure);
+  const style =
+    styleInput.maxHeightMeters === undefined
+      ? widthOnly
+      : resolveTextStyle(styleInput, lines.length);
+  return { style, pages: paginate(lines, style.maxLinesPerPage) };
 }
 
 /** Reject if `promise` does not resolve within `ms`, so the factory can swap. */

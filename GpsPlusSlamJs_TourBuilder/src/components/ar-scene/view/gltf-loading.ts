@@ -24,12 +24,14 @@
 
 import type { Object3D, Sprite, Material } from "three";
 import {
+  Box3,
   Mesh,
   Texture,
   TextureLoader,
   PlaneGeometry,
   MeshBasicMaterial,
   DoubleSide,
+  Vector3,
 } from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
@@ -60,6 +62,7 @@ export async function parseTemplate(
 ): Promise<ParsedTemplate> {
   if (kind === "model") {
     const gltf = await gltfLoader.loadAsync(url);
+    normalizeModel(gltf.scene);
     return { root: gltf.scene, ownedTextures: [] };
   }
 
@@ -79,6 +82,35 @@ export async function parseTemplate(
   // on it, so the always-visible play/pause panel has room underneath.
   mesh.position.y = VISUAL_GROUND_CLEARANCE_M + SPRITE_HEIGHT_M / 2;
   return { root: mesh, ownedTextures: [texture] };
+}
+
+/**
+ * Make a parsed model share the sprite template's footprint (D4,
+ * Shared-Contract.md — `model`/`sprite` are interchangeable slots on a
+ * waypoint) instead of rendering at whatever scale/pivot/position its author
+ * left it at:
+ *
+ * - uniformly scaled so its height matches `SPRITE_HEIGHT_M`, preserving the
+ *   model's own proportions rather than stretching it to the sprite's width;
+ * - re-centred on the waypoint's vertical (X/Z) axis, matching the sprite
+ *   plane, which is always centred there;
+ * - lifted so its lowest point clears the ground by
+ *   `VISUAL_GROUND_CLEARANCE_M`, matching the sprite/fallback-marker
+ *   convention (config.ts) instead of trusting the model's authored pivot —
+ *   left alone, a center-pivot GLB renders sunk roughly halfway into the
+ *   ground.
+ */
+export function normalizeModel(root: Object3D): void {
+  const box = new Box3().setFromObject(root);
+  if (box.isEmpty()) return;
+  const size = box.getSize(new Vector3());
+  if (size.y > 0) root.scale.multiplyScalar(SPRITE_HEIGHT_M / size.y);
+
+  const scaledBox = new Box3().setFromObject(root);
+  const center = scaledBox.getCenter(new Vector3());
+  root.position.x -= center.x;
+  root.position.z -= center.z;
+  root.position.y += VISUAL_GROUND_CLEARANCE_M - scaledBox.min.y;
 }
 
 /**

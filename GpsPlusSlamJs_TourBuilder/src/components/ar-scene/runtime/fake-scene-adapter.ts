@@ -184,8 +184,12 @@ export function createFakeSceneAdapter(
     buildFallbackVisual(
       handle: WaypointHandle,
       _hasAudio?: boolean,
+      showMarker = true,
     ): VisualHandle {
-      record("buildFallbackVisual", handle.waypointId);
+      record(
+        showMarker ? "buildFallbackVisual" : "buildFallbackVisual:noMarker",
+        handle.waypointId,
+      );
       const visual = { visualId: `fallback-${nextVisualId++}` };
       liveVisuals.add(visual.visualId);
       visualOwner.set(visual.visualId, handle.waypointId);
@@ -205,8 +209,10 @@ export function createFakeSceneAdapter(
       else visible.delete(owner);
     },
 
-    showTranscript(handle: WaypointHandle, text: string): void {
-      transcriptLog.push(`show:${handle.waypointId}:${text.slice(0, 12)}`);
+    showTranscript(handle: WaypointHandle, text: string, centered = false): void {
+      transcriptLog.push(
+        `show:${handle.waypointId}:${text.slice(0, 12)}${centered ? ":centered" : ""}`,
+      );
     },
     hideTranscript(handle: WaypointHandle): void {
       transcriptLog.push(`hide:${handle.waypointId}`);
@@ -214,7 +220,10 @@ export function createFakeSceneAdapter(
     disposeTranscript(handle: WaypointHandle): void {
       transcriptLog.push(`dispose:${handle.waypointId}`);
     },
-    pageTranscript(handle: WaypointHandle): void {
+    pageTranscript(
+      handle: WaypointHandle,
+      _uv?: { readonly u: number; readonly v: number },
+    ): void {
       transcriptLog.push(`page:${handle.waypointId}`);
     },
 

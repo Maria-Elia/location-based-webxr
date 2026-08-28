@@ -27,4 +27,53 @@ describe("resolveTextStyle", () => {
     );
     expect(resolved.maxLinesPerPage).toBeGreaterThanOrEqual(1);
   });
+
+  it("ignores maxHeightMeters when lineCount is not given", () => {
+    const withCap = resolveTextStyle({
+      ...DEFAULT_TEXT_STYLE,
+      maxHeightMeters: 1.8,
+    });
+    expect(withCap.planeH).toBeCloseTo(resolved.planeH, 6);
+    expect(withCap.canvasH).toBe(768);
+  });
+});
+
+describe("resolveTextStyle with dynamic height (maxHeightMeters + lineCount)", () => {
+  const maxHeightMeters = 1.8;
+  const floorPlaneH = DEFAULT_TEXT_STYLE.maxWidthMeters * (768 / 1024);
+
+  it("stays at the fixed-aspect floor when the content already fits", () => {
+    const resolved = resolveTextStyle(
+      { ...DEFAULT_TEXT_STYLE, maxHeightMeters },
+      1,
+    );
+    expect(resolved.planeH).toBeCloseTo(floorPlaneH, 6);
+    expect(resolved.canvasH).toBe(768);
+  });
+
+  it("grows past the floor to fit more lines, without exceeding the cap", () => {
+    const resolved = resolveTextStyle(
+      { ...DEFAULT_TEXT_STYLE, maxHeightMeters },
+      6,
+    );
+    expect(resolved.planeH).toBeGreaterThan(floorPlaneH);
+    expect(resolved.planeH).toBeLessThan(maxHeightMeters);
+    // Pixel density along Y matches X (within integer-pixel rounding), so
+    // growing the panel never visibly stretches the text/buttons.
+    const densityY = resolved.canvasH / resolved.planeH;
+    const densityX = resolved.canvasW / resolved.planeW;
+    expect(Math.abs(densityY - densityX) / densityX).toBeLessThan(0.01);
+    // The panel grew enough to fit every line on one page.
+    expect(resolved.maxLinesPerPage).toBeGreaterThanOrEqual(6);
+  });
+
+  it("clamps at maxHeightMeters when the content needs more room than that", () => {
+    const resolved = resolveTextStyle(
+      { ...DEFAULT_TEXT_STYLE, maxHeightMeters },
+      500,
+    );
+    expect(resolved.planeH).toBeCloseTo(maxHeightMeters, 6);
+    // Still short of fitting everything — pagination handles the remainder.
+    expect(resolved.maxLinesPerPage).toBeLessThan(500);
+  });
 });

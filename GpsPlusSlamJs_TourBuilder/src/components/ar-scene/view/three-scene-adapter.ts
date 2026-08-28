@@ -155,11 +155,16 @@ export function createThreeSceneAdapter(
       );
     },
 
-    buildFallbackVisual(handle: WaypointHandle, hasAudio = true): VisualHandle {
+    buildFallbackVisual(
+      handle: WaypointHandle,
+      hasAudio = true,
+      showMarker = true,
+    ): VisualHandle {
       return visuals.buildFallbackVisual(
         registry.get(handle.waypointId),
         handle,
         hasAudio,
+        showMarker,
       );
     },
 
@@ -171,10 +176,10 @@ export function createThreeSceneAdapter(
       visuals.setVisible(visual, isVisible);
     },
 
-    showTranscript(handle: WaypointHandle, text: string): void {
+    showTranscript(handle: WaypointHandle, text: string, centered = false): void {
       const node = registry.get(handle.waypointId);
       if (node === undefined) return;
-      showTranscript(node, text);
+      showTranscript(node, text, centered);
     },
 
     hideTranscript(handle: WaypointHandle): void {
@@ -187,9 +192,12 @@ export function createThreeSceneAdapter(
       if (node !== undefined) disposeTranscript(node);
     },
 
-    pageTranscript(handle: WaypointHandle): void {
+    pageTranscript(
+      handle: WaypointHandle,
+      uv?: { readonly u: number; readonly v: number },
+    ): void {
       const node = registry.get(handle.waypointId);
-      if (node !== undefined) pageTranscript(node);
+      if (node !== undefined) pageTranscript(node, uv);
     },
 
     playAudio(handle: WaypointHandle, url: string): void {

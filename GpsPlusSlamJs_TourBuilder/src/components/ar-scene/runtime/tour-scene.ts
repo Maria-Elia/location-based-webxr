@@ -344,7 +344,7 @@ export function createTourScene(options: TourSceneOptions): TourScene {
     const presenter = presenters.get(hit.waypointId);
     if (presenter === undefined) return;
     if (hit.role === "transcript") {
-      presenter.pageTranscript();
+      presenter.pageTranscript(hit.uv);
       return;
     }
     if (hit.role === "transport" && handleTransportTap(hit, presenter)) return;

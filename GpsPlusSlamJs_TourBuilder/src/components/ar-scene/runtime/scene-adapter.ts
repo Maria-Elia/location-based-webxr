@@ -49,8 +49,9 @@ export interface TapHit {
    * instead of treating every hit on it as a toggle.
    */
   readonly role: "visual" | "transcript" | "transport";
-  /** Panel-local hit position in [0,1]; only set for a `"transport"` hit
-   *  (the mesh's `PlaneGeometry` UV), needed to resolve toggle vs seek. */
+  /** Panel-local hit position in [0,1] (the mesh's `PlaneGeometry` UV); set
+   *  for a `"transport"` hit (resolves toggle vs seek) and a `"transcript"`
+   *  hit (resolves prev vs next vs a no-op tap on the text body). */
   readonly uv?: { readonly u: number; readonly v: number };
 }
 
@@ -96,18 +97,39 @@ export interface SceneAdapter {
     template: TemplateHandle,
     hasAudio?: boolean,
   ): VisualHandle;
-  /** Procedural stand-in when an asset is missing or corrupt (§7.2 soft-fail). */
-  buildFallbackVisual(handle: WaypointHandle, hasAudio?: boolean): VisualHandle;
+  /**
+   * Procedural stand-in when an asset is missing or corrupt (§7.2 soft-fail).
+   * `showMarker` (default `true`) draws the cone; pass `false` for a
+   * breadcrumb-only stop whose transcript already fills the visual's slot —
+   * the transport panel (when `hasAudio`) is still built either way.
+   */
+  buildFallbackVisual(
+    handle: WaypointHandle,
+    hasAudio?: boolean,
+    showMarker?: boolean,
+  ): VisualHandle;
   /** Detach + drop this clone. Never deep-disposes shared resources (A10). */
   releaseVisual(visual: VisualHandle): void;
   setVisible(visual: VisualHandle, visible: boolean): void;
 
   // ── Transcript (component 2, A14/A15) ─────────────────────────────────────
-  showTranscript(handle: WaypointHandle, text: string): void;
+  /**
+   * `centered` places the panel in the visual's own slot (local X = 0)
+   * instead of beside it — used for a breadcrumb-only stop (no image, no
+   * model) where no fallback marker occupies that slot.
+   */
+  showTranscript(
+    handle: WaypointHandle,
+    text: string,
+    centered?: boolean,
+  ): void;
   hideTranscript(handle: WaypointHandle): void;
   disposeTranscript(handle: WaypointHandle): void;
-  /** Page the shown transcript after a tap on its controls. */
-  pageTranscript(handle: WaypointHandle): void;
+  /** Page the shown transcript after a tap on its controls (`uv` decides prev/next/no-op). */
+  pageTranscript(
+    handle: WaypointHandle,
+    uv?: { readonly u: number; readonly v: number },
+  ): void;
 
   // ── Audio (component 1's player, A16/A17) ─────────────────────────────────
   playAudio(handle: WaypointHandle, url: string): void;

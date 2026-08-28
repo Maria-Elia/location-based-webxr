@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { Texture, Vector3 } from "three";
+import { Texture, Vector3, type Mesh, type PlaneGeometry } from "three";
 
-import { PAGE_PANEL_LAYOUT } from "../core/page-layout.js";
+import {
+  computePagePanelLayout,
+  PAGE_PANEL_LAYOUT,
+} from "../core/page-layout.js";
 import type { Measure } from "../core/text-wrap.js";
 import { createInWorldText } from "./in-world-text.js";
 import type { SurfaceDeps, SurfaceKind, TextSurface } from "./text-surface.js";
@@ -188,5 +191,104 @@ describe("createInWorldText — pagination & navigation", () => {
 
     label.setText("short");
     expect(label.pageLabel).toBe("1 / 1");
+  });
+});
+
+describe("createInWorldText — dynamic panel height (maxHeightMeters)", () => {
+  const FIXED_ASPECT = 768 / 1024;
+  /** 40 short paragraphs — each fits on its own line at the default width. */
+  const LONG_TEXT = Array.from({ length: 40 }, (_, i) => `line ${i}`).join(
+    "\n",
+  );
+
+  function planeSize(mesh: Mesh): { width: number; height: number } {
+    return (mesh.geometry as PlaneGeometry).parameters;
+  }
+
+  it("keeps the fixed-aspect floor when the text is short", async () => {
+    const label = createInWorldText({
+      text: "short",
+      position: new Vector3(),
+      backend: "canvas",
+      maxHeightMeters: 1.8,
+      measure,
+      createSurface: () => workingSurface(),
+    });
+    await label.ready;
+    const { width, height } = planeSize(label.pickMesh);
+    expect(height).toBeCloseTo(width * FIXED_ASPECT, 6);
+  });
+
+  it("grows the panel to fit more text, capped at maxHeightMeters", async () => {
+    const label = createInWorldText({
+      text: LONG_TEXT,
+      position: new Vector3(),
+      backend: "canvas",
+      maxHeightMeters: 1.8,
+      measure,
+      createSurface: () => workingSurface(),
+    });
+    await label.ready;
+    const { width, height } = planeSize(label.pickMesh);
+    expect(height).toBeGreaterThan(width * FIXED_ASPECT);
+    expect(height).toBeLessThanOrEqual(1.8);
+  });
+
+  it("resizes geometry and rebuilds the surface when setText changes how much fits", async () => {
+    const createSurface = vi.fn(
+      (_kind: SurfaceKind, _deps: SurfaceDeps): TextSurface => workingSurface(),
+    );
+    const label = createInWorldText({
+      text: "short",
+      position: new Vector3(),
+      backend: "canvas",
+      maxHeightMeters: 1.8,
+      measure,
+      createSurface,
+    });
+    await label.ready;
+    const before = planeSize(label.pickMesh).height;
+    const callsBefore = createSurface.mock.calls.length;
+
+    label.setText(LONG_TEXT);
+
+    const after = planeSize(label.pickMesh).height;
+    expect(after).toBeGreaterThan(before);
+    expect(createSurface.mock.calls.length).toBeGreaterThan(callsBefore);
+  });
+
+  it("keeps the Next button's physical size fixed and hit-testable after growing", async () => {
+    const floorHeight = 0.6 * FIXED_ASPECT; // DEFAULT_TEXT_STYLE.maxWidthMeters's floor
+    const shortLabel = createInWorldText({
+      text: "short",
+      position: new Vector3(),
+      backend: "canvas",
+      maxHeightMeters: 1.8,
+      measure,
+      createSurface: () => workingSurface(),
+    });
+    await shortLabel.ready;
+    const floorLayout = computePagePanelLayout(floorHeight, floorHeight);
+    const floorButtonHeightM = floorLayout.next.h * floorHeight;
+
+    const grownLabel = createInWorldText({
+      text: LONG_TEXT,
+      position: new Vector3(),
+      backend: "canvas",
+      maxHeightMeters: 1.8,
+      measure,
+      createSurface: () => workingSurface(),
+    });
+    await grownLabel.ready;
+    const grownHeight = planeSize(grownLabel.pickMesh).height;
+    const grownLayout = computePagePanelLayout(grownHeight, floorHeight);
+    const grownButtonHeightM = grownLayout.next.h * grownHeight;
+
+    expect(grownButtonHeightM).toBeCloseTo(floorButtonHeightM, 6);
+    // Hit-testing lines up with the actual (dynamic) rendered layout, not a
+    // stale layout sized for the panel's default height.
+    expect(grownLabel.hitTest(centre(grownLayout.next))).toEqual({
+      type: "next",
+    });
   });
 });

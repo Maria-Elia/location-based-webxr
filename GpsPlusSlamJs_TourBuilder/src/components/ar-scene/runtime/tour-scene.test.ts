@@ -327,6 +327,54 @@ describe("soft-fail on a bad asset (contract D14b)", () => {
   });
 });
 
+describe("a breadcrumb-only stop with a transcript", () => {
+  const TRANSCRIPT_ONLY_TOUR: Tour = {
+    id: "tour-transcript-only",
+    name: "Test",
+    description: "",
+    assets: [],
+    waypoints: [
+      {
+        id: "wp-text",
+        position: { lat: 1, lon: 1 },
+        prefetchRadius: 25,
+        activeRadius: 10,
+        content: { transcript: "Nothing to see, only to read." },
+      },
+    ],
+    breadcrumb: [],
+  };
+  const TRANSCRIPT_ONLY_POSITIONS: Readonly<Record<string, Vector3>> = {
+    "wp-text": new Vector3(0, 0, 0),
+  };
+
+  it("skips the marker and shows the transcript centered in its slot", async () => {
+    const h = setup({
+      tour: TRANSCRIPT_ONLY_TOUR,
+      positions: TRANSCRIPT_ONLY_POSITIONS,
+    });
+    approach(h, 100, 0);
+    await flush();
+
+    expect(
+      h.adapter.calls.some(
+        (c) => c.kind === "buildFallbackVisual" && c.id === "wp-text",
+      ),
+    ).toBe(false);
+    expect(
+      h.adapter.calls.some(
+        (c) =>
+          c.kind === "buildFallbackVisual:noMarker" && c.id === "wp-text",
+      ),
+    ).toBe(true);
+    expect(
+      h.adapter.transcriptLog.some(
+        (e) => e.startsWith("show:wp-text") && e.endsWith(":centered"),
+      ),
+    ).toBe(true);
+  });
+});
+
 describe("the story session", () => {
   let h: Harness;
   beforeEach(async () => {

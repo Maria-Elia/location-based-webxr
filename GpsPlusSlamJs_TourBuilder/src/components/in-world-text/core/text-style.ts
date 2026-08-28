@@ -11,7 +11,7 @@
  * Pure arithmetic: no Three.js, no DOM.
  */
 
-import { PAGE_PANEL_LAYOUT } from "./page-layout.js";
+import { chromeHeightM, PAGE_PANEL_LAYOUT } from "./page-layout.js";
 
 export interface TextStyle {
   readonly fontPx: number;
@@ -22,6 +22,12 @@ export interface TextStyle {
   readonly accentColor: string; // enabled Prev/Next buttons + indicator
   readonly mutedColor: string; // disabled (edge) buttons
   readonly maxWidthMeters: number; // physical panel width
+  /**
+   * Optional cap, in metres, on how tall the panel may grow to fit its text
+   * (see `resolveTextStyle`'s `lineCount` param). Omitted → today's fixed 4:3
+   * aspect, unconditionally.
+   */
+  readonly maxHeightMeters?: number;
 }
 
 export const DEFAULT_TEXT_STYLE: TextStyle = {
@@ -40,6 +46,10 @@ export interface ResolvedTextStyle extends TextStyle {
   readonly canvasH: number;
   readonly planeW: number; // metres
   readonly planeH: number; // metres
+  /** This panel's default (fixed-aspect) height for its width — the floor
+   *  `planeH` never shrinks below, and the reference size the page-layout
+   *  footer/button chrome is pinned to (`computePagePanelLayout`). */
+  readonly floorPlaneH: number;
   readonly wrapWidthPx: number; // max line width fed to wrapText (with safety margin)
   readonly maxLinesPerPage: number; // derived from the text rect height / line height
 }
@@ -51,17 +61,51 @@ const CANVAS_H = 768;
  *  degrades to a hidden sub-pixel rather than an overflow/clip (plan R4). */
 const WRAP_SAFETY = 0.95;
 
-export function resolveTextStyle(style: TextStyle): ResolvedTextStyle {
+/**
+ * Resolve a `TextStyle` into concrete canvas/plane dimensions.
+ *
+ * `lineCount` — the number of wrapped lines the current text produces at this
+ * style's `wrapWidthPx` (independent of panel height, so callers can wrap
+ * once and pass the result here) — only matters when `style.maxHeightMeters`
+ * is also set; otherwise the panel keeps its fixed 4:3 aspect regardless.
+ * When both are given, the panel grows past its default (fixed-aspect)
+ * height to fit `lineCount` lines, capped at `maxHeightMeters`. The canvas
+ * pixel height scales with the plane height at the same px/metre density as
+ * the (always fixed) width, so growing never stretches text or buttons.
+ */
+export function resolveTextStyle(
+  style: TextStyle,
+  lineCount?: number,
+): ResolvedTextStyle {
   const planeW = style.maxWidthMeters;
-  const planeH = planeW * (CANVAS_H / CANVAS_W);
+  const floorPlaneH = planeW * (CANVAS_H / CANVAS_W);
+  const pxPerMetre = CANVAS_W / planeW;
   const textRectWidthPx = PAGE_PANEL_LAYOUT.text.w * CANVAS_W;
-  const textRectHeightPx = PAGE_PANEL_LAYOUT.text.h * CANVAS_H;
+  // The footer/top-margin chrome (page-layout.ts) has a fixed physical size
+  // pinned to floorPlaneH; every metre above that goes entirely to the text
+  // rect, so this is the one place both the growth math below and
+  // maxLinesPerPage need to agree on.
+  const chromeM = chromeHeightM(floorPlaneH);
+
+  let planeH = floorPlaneH;
+  if (style.maxHeightMeters !== undefined && lineCount !== undefined) {
+    const desiredTextHeightM =
+      (Math.max(1, lineCount) * style.lineHeightPx) / pxPerMetre;
+    planeH = Math.min(
+      Math.max(chromeM + desiredTextHeightM, floorPlaneH),
+      style.maxHeightMeters,
+    );
+  }
+
+  const canvasH = Math.round(planeH * pxPerMetre);
+  const textRectHeightPx = (planeH - chromeM) * pxPerMetre;
   return {
     ...style,
     canvasW: CANVAS_W,
-    canvasH: CANVAS_H,
+    canvasH,
     planeW,
     planeH,
+    floorPlaneH,
     wrapWidthPx: textRectWidthPx * WRAP_SAFETY,
     maxLinesPerPage: Math.max(
       1,

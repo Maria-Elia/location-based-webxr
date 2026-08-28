@@ -59,7 +59,7 @@ export interface WaypointPresenter {
   startStory(): void;
   showTranscript(): void;
   hideTranscript(): void;
-  pageTranscript(): void;
+  pageTranscript(uv?: { readonly u: number; readonly v: number }): void;
   /** Introspection for the demo HUD and the e2e assertions. */
   debugState(): VisualLifecycleState;
   dispose(): void;
@@ -72,6 +72,12 @@ export function createWaypointPresenter(
   const handle = adapter.createWaypointRoot(waypoint.id, waypoint.position);
   const visual = selectWaypointVisual(waypoint);
   const hasAudio = waypoint.content.audio !== undefined;
+  const hasTranscript =
+    waypoint.content.transcript !== undefined &&
+    waypoint.content.transcript !== "";
+  /** Breadcrumb-only stop with something to say: the transcript takes the
+   *  visual's own slot instead of a placeholder cone sitting beside it. */
+  const useTranscriptAsVisual = visual === null && hasTranscript;
 
   let state = initialLifecycleState();
   let instance: VisualHandle | null = null;
@@ -92,7 +98,7 @@ export function createWaypointPresenter(
   function showTranscript(): void {
     const text = waypoint.content.transcript;
     if (text === undefined || text === "") return;
-    adapter.showTranscript(handle, text);
+    adapter.showTranscript(handle, text, useTranscriptAsVisual);
     transcriptShown = true;
   }
 
@@ -117,7 +123,14 @@ export function createWaypointPresenter(
         releaseModelRef();
         break;
       case "fallback":
-        instance = adapter.buildFallbackVisual(handle, hasAudio);
+        // A breadcrumb-only stop with a transcript shows the text in the
+        // visual's own slot instead of beside a marker cone — still builds
+        // the transport panel below it when there's audio to play.
+        instance = adapter.buildFallbackVisual(
+          handle,
+          hasAudio,
+          !useTranscriptAsVisual,
+        );
         break;
       case "show":
         if (instance !== null) adapter.setVisible(instance, true);
@@ -237,8 +250,8 @@ export function createWaypointPresenter(
     showTranscript,
     hideTranscript,
 
-    pageTranscript(): void {
-      if (transcriptShown) adapter.pageTranscript(handle);
+    pageTranscript(uv?: { readonly u: number; readonly v: number }): void {
+      if (transcriptShown) adapter.pageTranscript(handle, uv);
     },
 
     debugState: () => state,
