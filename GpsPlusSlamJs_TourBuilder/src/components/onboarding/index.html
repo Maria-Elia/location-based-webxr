@@ -10,10 +10,14 @@
          #canvas-root Three.js scene behind a floating #hud overlay. This
          demo has no canvas — it's a plain scrolling DOM page.
          `html` too — on mobile browsers it's `html`'s overflow that
-         actually gates touch scrolling, not just `body`'s. */
+         actually gates touch scrolling, not just `body`'s.
+         `!important`: Vite's production build injects demo.css's bundled
+         <link> at the END of <head>, after this inline block — reverses
+         the cascade this relies on in dev, so demo.css's `overflow: hidden`
+         otherwise wins in the deployed build only. */
       html,
       body {
-        overflow: auto;
+        overflow: auto !important;
       }
       #hud {
         position: static;

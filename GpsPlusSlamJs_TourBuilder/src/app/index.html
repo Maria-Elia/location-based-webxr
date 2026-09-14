@@ -12,10 +12,15 @@
          `html` too, not just `body` — demo.css hides overflow on both, and
          on mobile browsers it's `html`'s overflow that actually gates touch
          scrolling of the page; overriding only `body` left the page unable
-         to scroll on a phone despite working fine with a mouse wheel. */
+         to scroll on a phone despite working fine with a mouse wheel.
+         `!important`: Vite's production build injects demo.css's bundled
+         <link> at the END of <head> (after this inline block), reversing
+         the source-order cascade this override relies on in dev — without
+         it demo.css's `overflow: hidden` wins in the deployed build even
+         though it loses locally under `vite dev`. */
       html,
       body {
-        overflow: auto;
+        overflow: auto !important;
       }
     </style>
   </head>
