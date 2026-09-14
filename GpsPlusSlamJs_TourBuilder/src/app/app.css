@@ -284,13 +284,17 @@ textarea:focus-visible {
   border-color: var(--accent);
 }
 
-/* Status text driven by dataset.state = "ok" | "error" (AC13). */
+/* Status text driven by dataset.state = "ok" | "error" (AC13). qr-status
+   holds the generated share link as a long, unbroken URL string (see
+   pack-and-share-panel.ts) — without a break rule it doesn't wrap and
+   forces the panel wider than the phone screen instead. */
 p[data-testid$="-status"],
 p[data-testid="pack-status"],
 p[data-testid="qr-status"] {
   min-height: 1.2em;
   font-size: 13px;
   color: var(--text-muted);
+  overflow-wrap: break-word;
 }
 
 [data-state="ok"] {
