@@ -74,7 +74,14 @@
 /* ── Shell ─────────────────────────────────────────────────────────────── */
 
 #app-root {
-  min-height: 100dvh;
+  /* `svh` (small viewport height), not `dvh`: `dvh` recalculates live as the
+     mobile browser's address/toolbar chrome collapses on the first scroll
+     gesture, so `min-height` grows mid-scroll — the browser then tries to
+     preserve visual position across that layout shift and it read as the
+     page teleporting on the very first scroll before settling down. `svh`
+     is pinned to the chrome-collapsed size from the start, so nothing
+     about it changes as the user scrolls. */
+  min-height: 100svh;
   padding: var(--space-fluid-5) var(--space-fluid-4) var(--space-8);
   display: flex;
   flex-direction: column;
