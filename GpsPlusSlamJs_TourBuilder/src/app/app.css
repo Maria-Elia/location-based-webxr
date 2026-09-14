@@ -311,6 +311,51 @@ p[data-testid="qr-status"] {
   color: var(--error);
 }
 
+/* ── Demo-tour chip (Authoring landing, before the onboarding gate) ─────── */
+
+/* A secondary affordance, not a second primary action — sized to its
+   content and centered, not stretched to the shell's full column width
+   like every other direct `#app-root` child. Same pill language as
+   `.map-badge` rather than a bare underlined link. */
+/* Specificity note: `#app-root > *` is an ID selector and would otherwise
+   beat a bare `.demo-tour-chip` class, so the width override has to be
+   qualified the same way to actually win. */
+#app-root > .demo-tour-chip {
+  display: inline-flex;
+  align-self: center;
+  align-items: center;
+  gap: 6px;
+  width: auto;
+  max-width: none;
+  margin: 0 auto;
+  padding: 7px 14px 7px 12px;
+  border-radius: var(--radius-full);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  transition:
+    background var(--duration-base) var(--ease-out),
+    border-color var(--duration-base) var(--ease-out);
+}
+
+.demo-tour-chip svg {
+  flex-shrink: 0;
+}
+
+.demo-tour-chip:hover,
+.demo-tour-chip:focus-visible {
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+}
+
+.demo-tour-chip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 /* ── Onboarding gate (component 9 — no classNames, styled via testid) ──── */
 
 .gate-card {
