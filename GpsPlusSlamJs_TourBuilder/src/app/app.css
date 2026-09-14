@@ -286,12 +286,18 @@ textarea:focus-visible {
 
 /* Status text driven by dataset.state = "ok" | "error" (AC13). qr-status
    holds the generated share link as a long, unbroken URL string (see
-   pack-and-share-panel.ts) — without a break rule it doesn't wrap and
-   forces the panel wider than the phone screen instead. */
+   pack-and-share-panel.ts). It's a grid item of `.panel` — a grid/flex
+   item's automatic minimum width is its content's intrinsic size by
+   default, and Chromium (unlike Firefox) doesn't factor `overflow-wrap`
+   into that, so the box stayed at the URL's full unbroken width and
+   pushed the panel wider than the phone screen regardless of the break
+   rule below. `min-width: 0` removes that content-driven floor so the
+   item actually shrinks to the grid track's width. */
 p[data-testid$="-status"],
 p[data-testid="pack-status"],
 p[data-testid="qr-status"] {
   min-height: 1.2em;
+  min-width: 0;
   font-size: 13px;
   color: var(--text-muted);
   overflow-wrap: break-word;
