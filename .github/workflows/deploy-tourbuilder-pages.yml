@@ -52,7 +52,7 @@ jobs:
 
       - name: Build TourBuilder
         # Base is "/": Pages serves this at the custom domain root
-        # (tourguide.mariaelia.de), not a project-site subpath. See the
+        # (tourbuilder.mariaelia.de), not a project-site subpath. See the
         # public/CNAME file that pins the domain for Actions-based deploys.
         working-directory: GpsPlusSlamJs_TourBuilder
         run: pnpm exec vite build --base=/
