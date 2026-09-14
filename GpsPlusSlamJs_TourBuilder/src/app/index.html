@@ -8,7 +8,12 @@
     <link rel="stylesheet" href="./app.css" />
     <style>
       /* Override shared demo.css: no full-bleed canvas — a plain scrolling
-         DOM page, same override every non-Three.js demo already uses. */
+         DOM page, same override every non-Three.js demo already uses.
+         `html` too, not just `body` — demo.css hides overflow on both, and
+         on mobile browsers it's `html`'s overflow that actually gates touch
+         scrolling of the page; overriding only `body` left the page unable
+         to scroll on a phone despite working fine with a mouse wheel. */
+      html,
       body {
         overflow: auto;
       }

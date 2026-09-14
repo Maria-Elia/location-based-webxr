@@ -8,7 +8,10 @@
     <style>
       /* Override shared demo.css: that stylesheet assumes a full-bleed
          #canvas-root Three.js scene behind a floating #hud overlay. This
-         demo has no canvas — it's a plain scrolling DOM page. */
+         demo has no canvas — it's a plain scrolling DOM page.
+         `html` too — on mobile browsers it's `html`'s overflow that
+         actually gates touch scrolling, not just `body`'s. */
+      html,
       body {
         overflow: auto;
       }

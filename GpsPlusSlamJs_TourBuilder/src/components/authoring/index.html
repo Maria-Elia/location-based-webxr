@@ -7,7 +7,10 @@
     <link rel="stylesheet" href="../shared/demo.css" />
     <style>
       /* Override shared demo.css: no full-bleed canvas here — a plain
-         scrolling DOM page, same override as the onboarding demo. */
+         scrolling DOM page, same override as the onboarding demo.
+         `html` too — on mobile browsers it's `html`'s overflow that
+         actually gates touch scrolling, not just `body`'s. */
+      html,
       body {
         overflow: auto;
       }
