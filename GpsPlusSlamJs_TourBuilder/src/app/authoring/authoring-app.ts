@@ -165,7 +165,11 @@ async function mountAuthoringTools(
   const mapHost = document.createElement("div");
   mapHost.className = "map-card map-card-flush";
   mapShell.appendChild(mapHost);
-  const tourMap = createTourMap(mapHost);
+  // Non-interactive: this map is a live-position preview while authoring,
+  // not something to pan/zoom, and leaving Leaflet's touch dragging on
+  // means a swipe starting over the map pans the map instead of scrolling
+  // the page (see tour-map.ts's `interactive` option).
+  const tourMap = createTourMap(mapHost, { interactive: false });
   tourMap?.show();
 
   // AC13: explicit waiting state until the first live GPS fix arrives —

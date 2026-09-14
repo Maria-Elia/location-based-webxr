@@ -47,6 +47,16 @@ const STATUS_COLOR: Record<WaypointMarkerStatus, string> = {
 export interface TourMapOptions {
   readonly tileServerUrl?: string;
   readonly onTileError?: (error: unknown) => void;
+  /**
+   * Set false for a map that's along for the ride rather than something to
+   * explore (e.g. the small live-position preview while authoring): with
+   * dragging/zoom left on, a swipe that starts anywhere over the map pans
+   * the map instead of scrolling the page — Leaflet grabs single-touch
+   * gestures for its own panning, so the surrounding page's scroll never
+   * sees them, which reads as the page being stuck. Defaults to true
+   * (unchanged behaviour for maps the visitor is meant to pan/zoom).
+   */
+  readonly interactive?: boolean;
 }
 
 export interface TourMapInstance {
@@ -86,12 +96,24 @@ export function createTourMap(
   }
 
   const tileServerUrl = options.tileServerUrl ?? DEFAULT_TILE_SERVER_URL;
+  const interactive = options.interactive ?? true;
 
   let leafletMap: L.Map | null = L.map(container, {
-    zoomControl: true,
+    zoomControl: interactive,
     attributionControl: false,
     center: [0, 0],
     zoom: DEFAULT_ZOOM,
+    ...(interactive
+      ? {}
+      : {
+          dragging: false,
+          touchZoom: false,
+          doubleClickZoom: false,
+          scrollWheelZoom: false,
+          boxZoom: false,
+          keyboard: false,
+          tap: false,
+        }),
   });
   const tileLayer = L.tileLayer(tileServerUrl, { maxZoom: MAX_ZOOM });
   tileLayer.on("tileerror", (e: L.TileErrorEvent) => {
