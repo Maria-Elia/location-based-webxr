@@ -344,9 +344,12 @@ export function createPreviewSession(
     setAutopilot(enabled) {
       if (enabled === autopilot) return;
       autopilot = enabled;
-      if (enabled) {
-        route.reset();
-      } else {
+      // Neither branch touches `route`'s own position: it already sits
+      // wherever autopilot last left it (advance() is the only thing that
+      // moves it, and that only runs while autopilot is on), so toggling
+      // off and back on resumes from there instead of jumping back to the
+      // start of the route every time.
+      if (!enabled) {
         // Hand the walker back exactly where the autopilot left it.
         walk.teleport(walk.pose());
       }

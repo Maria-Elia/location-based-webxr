@@ -31,8 +31,6 @@ export interface RouteFollower {
   pose(): WalkPose;
   /** True once the walker has reached the last point of the route. */
   isFinished(): boolean;
-  /** Return to the start of the route. */
-  reset(): void;
 }
 
 const ORIGIN: WalkPose = { x: 0, z: 0, headingRad: 0 };
@@ -95,13 +93,5 @@ export function createRouteFollower(
       return current;
     },
     isFinished: finished,
-    reset() {
-      segment = 0;
-      offset = 0;
-      current =
-        path.length === 0
-          ? ORIGIN
-          : { x: path[0]!.x, z: path[0]!.z, headingRad: current.headingRad };
-    },
   };
 }

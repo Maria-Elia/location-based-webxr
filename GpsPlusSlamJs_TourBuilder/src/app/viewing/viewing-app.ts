@@ -432,6 +432,12 @@ export function mountViewingApp(
     clearProgress(tour.id, deps.progressStorage);
     store.dispatch(clearTour());
     store.dispatch(loadTour(tour));
+    // The map already exists (ensureMap() no-ops once it does) and nothing
+    // else is subscribed to the store here — the progress subscription that
+    // normally drives this was torn down when the visitor left the last
+    // session — so without this it kept showing the old visited/GPS state
+    // until a full page reload recreated everything from scratch.
+    refreshMapMarkers();
     mountEntry();
   }
 
