@@ -238,7 +238,7 @@ export function createPreviewSession(
     const point = frame.toWorld(coord);
     return { x: point.x, z: point.z };
   });
-  const route = createRouteFollower({ path: routePoints });
+  const route = createRouteFollower({ path: routePoints, speedMps: 2.8 });
   let autopilot = false;
   let pitchRad = 0;
 
