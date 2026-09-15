@@ -132,9 +132,7 @@ describe("mountAuthoringView", () => {
       }),
     );
 
-    expect(root.querySelectorAll('[data-testid^="waypoint-"]')).toHaveLength(
-      1,
-    );
+    expect(root.querySelectorAll('[data-testid^="waypoint-"]')).toHaveLength(1);
   });
 
   it("a store notification from an unrelated section (e.g. the tour name field's blur-triggered change) never touches the Waypoints section's DOM, so a click in flight on Drop Waypoint isn't swallowed", () => {
@@ -262,7 +260,13 @@ describe("mountAuthoringView", () => {
     const { root } = harness(
       draft({
         waypoints: [
-          { id: "wp-1", position: { lat: 1, lon: 2 }, prefetchRadius: 25, activeRadius: 10, content: {} },
+          {
+            id: "wp-1",
+            position: { lat: 1, lon: 2 },
+            prefetchRadius: 25,
+            activeRadius: 10,
+            content: {},
+          },
         ],
       }),
     );
@@ -275,7 +279,13 @@ describe("mountAuthoringView", () => {
     const { root, session } = harness(
       draft({
         waypoints: [
-          { id: "wp-1", position: { lat: 1, lon: 2 }, prefetchRadius: 25, activeRadius: 10, content: {} },
+          {
+            id: "wp-1",
+            position: { lat: 1, lon: 2 },
+            prefetchRadius: 25,
+            activeRadius: 10,
+            content: {},
+          },
         ],
       }),
     );
@@ -295,7 +305,13 @@ describe("mountAuthoringView", () => {
     const { root, session } = harness(
       draft({
         waypoints: [
-          { id: "wp-1", position: { lat: 1, lon: 2 }, prefetchRadius: 25, activeRadius: 10, content: {} },
+          {
+            id: "wp-1",
+            position: { lat: 1, lon: 2 },
+            prefetchRadius: 25,
+            activeRadius: 10,
+            content: {},
+          },
         ],
       }),
     );
@@ -321,7 +337,13 @@ describe("mountAuthoringView", () => {
     const { root, session } = harness(
       draft({
         waypoints: [
-          { id: "wp-1", position: { lat: 1, lon: 2 }, prefetchRadius: 25, activeRadius: 10, content: {} },
+          {
+            id: "wp-1",
+            position: { lat: 1, lon: 2 },
+            prefetchRadius: 25,
+            activeRadius: 10,
+            content: {},
+          },
         ],
       }),
     );
@@ -431,34 +453,64 @@ describe("mountAuthoringView", () => {
     const { root } = harness(
       draft({
         waypoints: [
-          { id: "wp-1", position: { lat: 1, lon: 2 }, prefetchRadius: 25, activeRadius: 10, content: {} },
-          { id: "wp-2", position: { lat: 3, lon: 4 }, prefetchRadius: 25, activeRadius: 10, content: {} },
+          {
+            id: "wp-1",
+            position: { lat: 1, lon: 2 },
+            prefetchRadius: 25,
+            activeRadius: 10,
+            content: {},
+          },
+          {
+            id: "wp-2",
+            position: { lat: 3, lon: 4 },
+            prefetchRadius: 25,
+            activeRadius: 10,
+            content: {},
+          },
         ],
       }),
     );
 
-    expect(byTestId(root, "waypoint-wp-1").classList.contains("open")).toBe(false);
-    expect(byTestId(root, "waypoint-wp-2").classList.contains("open")).toBe(false);
+    expect(byTestId(root, "waypoint-wp-1").classList.contains("open")).toBe(
+      false,
+    );
+    expect(byTestId(root, "waypoint-wp-2").classList.contains("open")).toBe(
+      false,
+    );
 
     byTestId(root, "wp-toggle-wp-1").click();
-    expect(byTestId(root, "waypoint-wp-1").classList.contains("open")).toBe(true);
+    expect(byTestId(root, "waypoint-wp-1").classList.contains("open")).toBe(
+      true,
+    );
 
     byTestId(root, "wp-toggle-wp-2").click();
-    expect(byTestId(root, "waypoint-wp-1").classList.contains("open")).toBe(false);
-    expect(byTestId(root, "waypoint-wp-2").classList.contains("open")).toBe(true);
+    expect(byTestId(root, "waypoint-wp-1").classList.contains("open")).toBe(
+      false,
+    );
+    expect(byTestId(root, "waypoint-wp-2").classList.contains("open")).toBe(
+      true,
+    );
   });
 
   it("dropping a new waypoint expands it and collapses whatever was open", () => {
     const { root, store } = harness(
       draft({
         waypoints: [
-          { id: "wp-1", position: { lat: 1, lon: 2 }, prefetchRadius: 25, activeRadius: 10, content: {} },
+          {
+            id: "wp-1",
+            position: { lat: 1, lon: 2 },
+            prefetchRadius: 25,
+            activeRadius: 10,
+            content: {},
+          },
         ],
       }),
       { dropWaypoint: () => "wp-2" },
     );
     byTestId(root, "wp-toggle-wp-1").click();
-    expect(byTestId(root, "waypoint-wp-1").classList.contains("open")).toBe(true);
+    expect(byTestId(root, "waypoint-wp-1").classList.contains("open")).toBe(
+      true,
+    );
 
     // dropWaypoint() (mocked above to return "wp-2") is what actually adds
     // the waypoint via the real session in production; the fake store here
@@ -467,23 +519,47 @@ describe("mountAuthoringView", () => {
     store.setState(
       draft({
         waypoints: [
-          { id: "wp-1", position: { lat: 1, lon: 2 }, prefetchRadius: 25, activeRadius: 10, content: {} },
-          { id: "wp-2", position: { lat: 5, lon: 6 }, prefetchRadius: 25, activeRadius: 10, content: {} },
+          {
+            id: "wp-1",
+            position: { lat: 1, lon: 2 },
+            prefetchRadius: 25,
+            activeRadius: 10,
+            content: {},
+          },
+          {
+            id: "wp-2",
+            position: { lat: 5, lon: 6 },
+            prefetchRadius: 25,
+            activeRadius: 10,
+            content: {},
+          },
         ],
       }),
     );
     byTestId(root, "drop-waypoint").click();
 
-    expect(byTestId(root, "waypoint-wp-1").classList.contains("open")).toBe(false);
-    expect(byTestId(root, "waypoint-wp-2").classList.contains("open")).toBe(true);
+    expect(byTestId(root, "waypoint-wp-1").classList.contains("open")).toBe(
+      false,
+    );
+    expect(byTestId(root, "waypoint-wp-2").classList.contains("open")).toBe(
+      true,
+    );
   });
 
   it("clicking a visual tile's clear button dispatches removeAsset for that asset", () => {
     const { root, store } = harness(
       draft({
-        assets: [{ id: "asset-1", type: "model", filename: "assets/asset-1.glb" }],
+        assets: [
+          { id: "asset-1", type: "model", filename: "assets/asset-1.glb" },
+        ],
         waypoints: [
-          { id: "wp-1", position: { lat: 1, lon: 2 }, prefetchRadius: 25, activeRadius: 10, content: { model: "asset-1" } },
+          {
+            id: "wp-1",
+            position: { lat: 1, lon: 2 },
+            prefetchRadius: 25,
+            activeRadius: 10,
+            content: { model: "asset-1" },
+          },
         ],
       }),
     );
@@ -510,14 +586,25 @@ describe("mountAuthoringView", () => {
             activeRadius: 10,
             content: { model: "asset-1", audio: "asset-2", transcript: "  " },
           },
-          { id: "wp-2", position: { lat: 3, lon: 4 }, prefetchRadius: 25, activeRadius: 10, content: {} },
+          {
+            id: "wp-2",
+            position: { lat: 3, lon: 4 },
+            prefetchRadius: 25,
+            activeRadius: 10,
+            content: {},
+          },
         ],
       }),
     );
 
-    const wp1Summary = byTestId(root, "waypoint-wp-1").querySelector(".wp-summary")!;
+    const wp1Summary = byTestId(root, "waypoint-wp-1").querySelector(
+      ".wp-summary",
+    )!;
     expect(wp1Summary.querySelectorAll("svg")).toHaveLength(2); // model + audio, whitespace-only transcript doesn't count
-    expect(byTestId(root, "waypoint-wp-2").querySelector(".wp-summary-empty")?.textContent).toBe("empty");
+    expect(
+      byTestId(root, "waypoint-wp-2").querySelector(".wp-summary-empty")
+        ?.textContent,
+    ).toBe("empty");
   });
 
   it("shows an empty-state message when there are no waypoints, and hides it once one exists", () => {

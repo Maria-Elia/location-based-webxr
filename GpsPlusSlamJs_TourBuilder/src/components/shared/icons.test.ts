@@ -5,7 +5,19 @@ describe("ICONS", () => {
   it("exposes exactly the icon set this composition uses, each as an <svg> string", () => {
     const keys = Object.keys(ICONS).sort();
     expect(keys).toEqual(
-      ["audio", "check", "chevron", "cube", "photo", "spinner", "text", "x"].sort(),
+      [
+        "audio",
+        "check",
+        "chevron",
+        "cube",
+        "link",
+        "photo",
+        "pin",
+        "route",
+        "spinner",
+        "text",
+        "x",
+      ].sort(),
     );
     for (const svg of Object.values(ICONS)) {
       expect(svg.trim().startsWith("<svg")).toBe(true);

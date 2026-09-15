@@ -23,7 +23,10 @@ export interface PreparedZipUrl {
  * so the URL is left as-is with a warning — see
  * `components/cloud-loader/RECIPE.md` for the Worker setup.
  */
-export function prepareHostedZipUrl(raw: string, isDev: boolean): PreparedZipUrl {
+export function prepareHostedZipUrl(
+  raw: string,
+  isDev: boolean,
+): PreparedZipUrl {
   const notes: string[] = [];
   const normalized = normalizeShareUrl(raw);
   if (normalized !== raw) {

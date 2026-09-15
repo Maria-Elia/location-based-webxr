@@ -62,12 +62,16 @@ describe("mountLandingScreen", () => {
     const linkForm = root.querySelector<HTMLElement>(".landing-link-form")!;
 
     root
-      .querySelector<HTMLButtonElement>('[data-testid="landing-open-link-form"]')!
+      .querySelector<HTMLButtonElement>(
+        '[data-testid="landing-open-link-form"]',
+      )!
       .click();
     expect(linkForm.hidden).toBe(false);
 
     root
-      .querySelector<HTMLButtonElement>('[data-testid="landing-open-link-form"]')!
+      .querySelector<HTMLButtonElement>(
+        '[data-testid="landing-open-link-form"]',
+      )!
       .click();
     expect(linkForm.hidden).toBe(true);
   });
@@ -75,14 +79,18 @@ describe("mountLandingScreen", () => {
   it("follows a pasted full share link (its own `?tour=`) unchanged", () => {
     const { root, navigate } = setup();
     root
-      .querySelector<HTMLButtonElement>('[data-testid="landing-open-link-form"]')!
+      .querySelector<HTMLButtonElement>(
+        '[data-testid="landing-open-link-form"]',
+      )!
       .click();
 
     const input = root.querySelector<HTMLInputElement>(
       '[data-testid="landing-tour-link"]',
     )!;
     input.value = "https://example.com/app/?tour=https%3A%2F%2Fhost%2Ftour.zip";
-    root.querySelector<HTMLButtonElement>('[data-testid="landing-go"]')!.click();
+    root
+      .querySelector<HTMLButtonElement>('[data-testid="landing-go"]')!
+      .click();
 
     expect(navigate).toHaveBeenCalledWith(
       "https://example.com/app/?tour=https%3A%2F%2Fhost%2Ftour.zip",
@@ -92,14 +100,18 @@ describe("mountLandingScreen", () => {
   it("wraps a pasted raw hosted-zip URL into a `?tour=` link, same as the author's share panel", () => {
     const { root, navigate } = setup();
     root
-      .querySelector<HTMLButtonElement>('[data-testid="landing-open-link-form"]')!
+      .querySelector<HTMLButtonElement>(
+        '[data-testid="landing-open-link-form"]',
+      )!
       .click();
 
     const input = root.querySelector<HTMLInputElement>(
       '[data-testid="landing-tour-link"]',
     )!;
     input.value = "https://example.com/tour.zip";
-    root.querySelector<HTMLButtonElement>('[data-testid="landing-go"]')!.click();
+    root
+      .querySelector<HTMLButtonElement>('[data-testid="landing-go"]')!
+      .click();
 
     expect(navigate).toHaveBeenCalledTimes(1);
     const url = new URL(navigate.mock.calls[0]![0] as string);
@@ -109,14 +121,18 @@ describe("mountLandingScreen", () => {
   it("rejects unparsable input without navigating", () => {
     const { root, navigate } = setup();
     root
-      .querySelector<HTMLButtonElement>('[data-testid="landing-open-link-form"]')!
+      .querySelector<HTMLButtonElement>(
+        '[data-testid="landing-open-link-form"]',
+      )!
       .click();
 
     const input = root.querySelector<HTMLInputElement>(
       '[data-testid="landing-tour-link"]',
     )!;
     input.value = "not a url";
-    root.querySelector<HTMLButtonElement>('[data-testid="landing-go"]')!.click();
+    root
+      .querySelector<HTMLButtonElement>('[data-testid="landing-go"]')!
+      .click();
 
     expect(navigate).not.toHaveBeenCalled();
     const status = root.querySelector<HTMLElement>(
@@ -145,6 +161,8 @@ describe("mountLandingScreen", () => {
     await vi.waitFor(() => {
       expect(root.querySelector('[data-testid="grant-access"]')).not.toBeNull();
     });
-    expect(root.querySelector('[data-testid="landing-create-tour"]')).toBeNull();
+    expect(
+      root.querySelector('[data-testid="landing-create-tour"]'),
+    ).toBeNull();
   });
 });

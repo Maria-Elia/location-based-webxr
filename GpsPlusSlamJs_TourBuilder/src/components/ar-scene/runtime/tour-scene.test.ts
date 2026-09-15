@@ -363,8 +363,7 @@ describe("a breadcrumb-only stop with a transcript", () => {
     ).toBe(false);
     expect(
       h.adapter.calls.some(
-        (c) =>
-          c.kind === "buildFallbackVisual:noMarker" && c.id === "wp-text",
+        (c) => c.kind === "buildFallbackVisual:noMarker" && c.id === "wp-text",
       ),
     ).toBe(true);
     expect(

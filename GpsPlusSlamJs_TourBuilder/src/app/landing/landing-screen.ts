@@ -81,7 +81,11 @@ export function mountLandingScreen(
   linkInput.type = "text";
   linkInput.dataset["testid"] = "landing-tour-link";
   linkInput.placeholder = "Paste the tour link";
-  const linkField = buildLabeledField("Tour link", linkInput, "landing-tour-link");
+  const linkField = buildLabeledField(
+    "Tour link",
+    linkInput,
+    "landing-tour-link",
+  );
 
   const goButton = document.createElement("button");
   goButton.type = "button";
