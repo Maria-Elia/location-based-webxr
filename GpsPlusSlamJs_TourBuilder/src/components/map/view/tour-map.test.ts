@@ -51,6 +51,20 @@ function createMockMarker() {
   };
 }
 
+/** A minimal stand-in for Leaflet's own `Point`: just enough chained
+ *  `.add()` for `offsetTargetForObscuredBottom`'s pixel math to run, with
+ *  plain {x,y} so assertions can compare it directly. */
+function mockPoint(x: number, y: number) {
+  return {
+    x,
+    y,
+    add(other: [number, number] | { x: number; y: number }) {
+      const [ox, oy] = Array.isArray(other) ? other : [other.x, other.y];
+      return mockPoint(x + ox, y + oy);
+    },
+  };
+}
+
 function createMockMap() {
   const listeners: Record<string, Array<(e: unknown) => void>> = {};
   return {
@@ -59,6 +73,20 @@ function createMockMap() {
     fitBounds: vi.fn().mockReturnThis(),
     remove: vi.fn(),
     invalidateSize: vi.fn(),
+    getZoom: vi.fn(() => 17),
+    getSize: vi.fn(() => mockPoint(800, 600)),
+    // Identity-ish: real Leaflet's project/unproject do real Mercator
+    // math this test has no reason to re-verify — only that
+    // `offsetTargetForObscuredBottom` calls them and adds the right
+    // number of pixels, which round-tripping lat/lng through x/y proves
+    // just as well.
+    project: vi.fn((latlng: { lat: number; lng: number }) =>
+      mockPoint(latlng.lat, latlng.lng),
+    ),
+    unproject: vi.fn((point: { x: number; y: number }) => ({
+      lat: point.x,
+      lng: point.y,
+    })),
     zoomControl: { setPosition: vi.fn() },
     on: vi.fn((event: string, cb: (e: unknown) => void) => {
       (listeners[event] ??= []).push(cb);
@@ -103,6 +131,9 @@ vi.mock("leaflet", () => {
         extend: vi.fn().mockReturnThis(),
         isValid: vi.fn(() => false),
       })),
+      latLng: vi.fn((v: [number, number] | { lat: number; lng: number }) =>
+        Array.isArray(v) ? { lat: v[0], lng: v[1] } : v,
+      ),
     },
   };
 });
@@ -151,6 +182,45 @@ describe("createTourMap", () => {
 
   it("setGpsPosition centers the map at the given lat/lon", () => {
     const map = createTourMap(container)!;
+    map.setGpsPosition(52.5163, 13.3777);
+    expect(lastMapInstance.setView).toHaveBeenCalledWith(
+      [52.5163, 13.3777],
+      expect.any(Number),
+    );
+  });
+
+  it("setGpsPosition shifts the initial setView center down by half the obscured bottom height, so it lands at the CENTER OF THE VISIBLE STRIP above it", () => {
+    const getObscuredBottomPx = vi.fn(() => 200);
+    const map = createTourMap(container, { getObscuredBottomPx })!;
+
+    map.setGpsPosition(52.5163, 13.3777);
+
+    // project/unproject round-trip lat<->x and lng<->y in the mock, so the
+    // +100 (half of 200) landing in `lng` is the offset actually applying.
+    expect(lastMapInstance.setView).toHaveBeenCalledWith(
+      { lat: 52.5163, lng: 13.3777 + 100 },
+      expect.any(Number),
+    );
+  });
+
+  it("setGpsPosition applies the same shift to a later panTo, re-read fresh (not cached from the first fix)", () => {
+    const getObscuredBottomPx = vi.fn(() => 0);
+    const map = createTourMap(container, { getObscuredBottomPx })!;
+    map.setGpsPosition(1, 1); // no shift yet: nothing obscured on this fix
+
+    getObscuredBottomPx.mockReturnValue(60); // e.g. the sheet grew since
+    map.setGpsPosition(2, 2);
+
+    expect(lastMapInstance.panTo).toHaveBeenCalledWith({
+      lat: 2,
+      lng: 2 + 30,
+    });
+  });
+
+  it("setGpsPosition does not touch the target's shape at all when nothing is obscured", () => {
+    const map = createTourMap(container, {
+      getObscuredBottomPx: () => 0,
+    })!;
     map.setGpsPosition(52.5163, 13.3777);
     expect(lastMapInstance.setView).toHaveBeenCalledWith(
       [52.5163, 13.3777],
@@ -284,6 +354,20 @@ describe("createTourMap", () => {
     expect(pin.remove).toHaveBeenCalledOnce();
   });
 
+  it("the preview pin's popup auto-pan padding grows with the obscured bottom height, so a popup near it doesn't open underneath it", () => {
+    createTourMap(container, {
+      onDropWaypointHere: vi.fn(),
+      getObscuredBottomPx: () => 300,
+    });
+
+    lastMapInstance._fire("click", { latlng: { lat: 1, lng: 2 } });
+
+    const popupOptions = markerInstances[0]!.bindPopup.mock.calls[0]![1] as {
+      autoPanPaddingBottomRight: [number, number];
+    };
+    expect(popupOptions.autoPanPaddingBottomRight).toEqual([20, 320]);
+  });
+
   it("clicking the map again replaces the previous preview pin", () => {
     createTourMap(container, { onDropWaypointHere: vi.fn() });
 
@@ -315,6 +399,22 @@ describe("createTourMap", () => {
     ]);
 
     expect(lastMapInstance.fitBounds).toHaveBeenCalledOnce();
+  });
+
+  it("setWaypoints' initial fitBounds adds the obscured bottom height to its own bottom-right padding, on top of the base padding", () => {
+    const map = createTourMap(container, {
+      getObscuredBottomPx: () => 250,
+    })!;
+    map.setWaypoints([
+      { id: "wp-1", position: { lat: 1, lon: 1 }, status: "unvisited", order: 1 },
+    ]);
+
+    const fitBoundsOptions = lastMapInstance.fitBounds.mock.calls[0]![1] as {
+      padding: [number, number];
+      paddingBottomRight: [number, number];
+    };
+    expect(fitBoundsOptions.padding).toEqual([40, 40]);
+    expect(fitBoundsOptions.paddingBottomRight).toEqual([40, 290]);
   });
 
   it("does not re-center on waypoints once a GPS fix already centered the map", () => {
@@ -370,6 +470,19 @@ describe("createTourMap", () => {
     const map = createTourMap(container)!;
     map.show();
     expect(lastMapInstance.invalidateSize).toHaveBeenCalledOnce();
+  });
+
+  it("show()'s re-center of the last known fix also shifts for the obscured bottom height", () => {
+    const map = createTourMap(container, { getObscuredBottomPx: () => 80 })!;
+    map.setGpsPosition(1, 1);
+    lastMapInstance.setView.mockClear();
+
+    map.show();
+
+    expect(lastMapInstance.setView).toHaveBeenCalledWith(
+      { lat: 1, lng: 1 + 40 },
+      expect.any(Number),
+    );
   });
 
   it("resize() invalidates the map size on demand", () => {

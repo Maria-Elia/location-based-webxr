@@ -172,11 +172,13 @@ async function mountAuthoringTools(
   const mapHost = document.createElement("div");
   mapHost.className = "map-card map-card-flush map-card-fullscreen";
   mapShell.appendChild(mapHost);
-  // `session` is created below (it needs the map's own `withMapSync`
-  // position source first) but the map's click handler needs `session` —
-  // resolved via this forward reference: the handler only ever runs on a
-  // real user click, well after `session` is assigned further down.
+  // `session` and `authoringRoot` (the floating panel) are both created
+  // below, but the map needs to reference them now — resolved via these
+  // forward references, since neither callback runs until well after the
+  // rest of this function has finished assigning them (a real user click,
+  // or the next GPS fix/waypoint-list change).
   let session: AuthoringSession | undefined;
+  let authoringRoot: HTMLElement | undefined;
   // Full-bleed and interactive: the map IS the authoring screen now, so
   // the author can pan/zoom to see the route, drag a marker to fine-tune
   // its position, or click an empty spot to drop one exactly there — three
@@ -190,6 +192,15 @@ async function mountAuthoringTools(
     onDropWaypointHere: (lat, lon) => {
       session?.dropWaypoint({ lat, lon });
     },
+    // On desktop the panel is a sidebar (doesn't cover the map's bottom
+    // edge at all); on mobile it's a bottom sheet that does, and its own
+    // height changes as its content does — so this reads it fresh every
+    // time rather than caching a value that would go stale (see
+    // `getObscuredBottomPx`'s own doc comment in tour-map.ts).
+    getObscuredBottomPx: () =>
+      window.innerWidth > 720
+        ? 0
+        : (authoringRoot?.getBoundingClientRect().height ?? 0),
   });
   tourMap?.show();
 
@@ -240,7 +251,7 @@ async function mountAuthoringTools(
     filesAssetProvider,
   });
 
-  const authoringRoot = document.createElement("div");
+  authoringRoot = document.createElement("div");
   authoringRoot.className = "authoring-sections";
   toolsHost.appendChild(authoringRoot);
 

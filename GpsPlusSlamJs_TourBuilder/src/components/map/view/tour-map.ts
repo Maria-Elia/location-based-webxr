@@ -87,6 +87,18 @@ export interface TourMapOptions {
    * Clicking elsewhere (or confirming) clears the pin.
    */
   readonly onDropWaypointHere?: (lat: number, lon: number) => void;
+  /**
+   * Pixels of the map's OWN bottom edge that something else (the mobile
+   * bottom sheet, in authoring) currently covers — everything this
+   * component centers (a GPS fix, the pending-pin popup, the initial
+   * waypoint fitBounds) then centers within the space actually visible
+   * above that, not the full container. A live getter, not a static
+   * number, since a bottom sheet's height changes as its content does
+   * (and doesn't apply at all outside its own breakpoint) — read fresh
+   * on every call rather than cached. Omit (or return 0) where nothing
+   * covers the map.
+   */
+  readonly getObscuredBottomPx?: () => number;
 }
 
 export interface TourMapInstance {
@@ -105,6 +117,37 @@ export interface TourMapInstance {
   /** The underlying Leaflet map, or `null` after `destroy()`. */
   getLeafletMap(): L.Map | null;
   destroy(): void;
+}
+
+/**
+ * The geographic point that, once centered by Leaflet in the usual way
+ * (which centers within the FULL container), would instead render at the
+ * center of the space still visible above `obscuredBottomPx` of covered
+ * bottom edge. Pure pixel math, not a Leaflet-native "padding" concept —
+ * `setView`/`panTo` center a single point with no padding option of their
+ * own (unlike `fitBounds`, which gets the real thing below).
+ *
+ * The shift is always exactly half the obscured height, regardless of the
+ * container's own size: centering within a shorter visible strip only
+ * ever needs pushing the true center down by half of what got shorter.
+ */
+function offsetTargetForObscuredBottom(
+  map: L.Map,
+  target: L.LatLngExpression,
+  zoom: number,
+  obscuredBottomPx: number,
+): L.LatLngExpression {
+  // Untouched, not even round-tripped through L.latLng(), when there's
+  // nothing to correct for — the common case (desktop, or mobile before
+  // the panel exists yet) should look exactly like it did before this
+  // existed, callers included: `target` keeps whatever shape it arrived
+  // in (a plain [lat, lon] tuple, here) rather than always coming back as
+  // a `LatLng` instance.
+  if (obscuredBottomPx <= 0) return target;
+  const point = map
+    .project(L.latLng(target), zoom)
+    .add([0, obscuredBottomPx / 2]);
+  return map.unproject(point, zoom);
 }
 
 function buildWaypointIconHtml(
@@ -205,7 +248,15 @@ export function createTourMap(
         }),
       })
         .addTo(leafletMap!)
-        .bindPopup(button, { closeButton: true, offset: [0, -PENDING_PIN_SIZE_PX] })
+        .bindPopup(button, {
+          closeButton: true,
+          offset: [0, -PENDING_PIN_SIZE_PX],
+          // Leaflet already auto-pans the map to keep a just-opened popup
+          // on screen — tell it the bottom sheet's live height counts as
+          // "off screen" too, so a tap near the bottom doesn't open a
+          // popup that ends up hidden underneath it.
+          autoPanPaddingBottomRight: [20, 20 + (options.getObscuredBottomPx?.() ?? 0)],
+        })
         .openPopup();
       // Closing the popup (the ✕, Escape, or clicking elsewhere on the map
       // — clicking elsewhere also re-fires this same "click" handler, which
@@ -235,14 +286,27 @@ export function createTourMap(
     setGpsPosition(lat: number, lon: number): void {
       lastPosition = [lat, lon];
       if (!leafletMap) return;
+      const obscured = options.getObscuredBottomPx?.() ?? 0;
       // Only the first fix sets the initial view (incl. zoom). Later calls
       // pan without touching zoom, so a user's manual zoom during playback
       // isn't fought on every position update.
       if (!hasCenteredOnce) {
-        leafletMap.setView([lat, lon], DEFAULT_ZOOM);
+        const center = offsetTargetForObscuredBottom(
+          leafletMap,
+          [lat, lon],
+          DEFAULT_ZOOM,
+          obscured,
+        );
+        leafletMap.setView(center, DEFAULT_ZOOM);
         hasCenteredOnce = true;
       } else {
-        leafletMap.panTo([lat, lon]);
+        const center = offsetTargetForObscuredBottom(
+          leafletMap,
+          [lat, lon],
+          leafletMap.getZoom(),
+          obscured,
+        );
+        leafletMap.panTo(center);
       }
     },
 
@@ -264,9 +328,15 @@ export function createTourMap(
         const bounds = L.latLngBounds(
           markers.map((m) => [m.position.lat, m.position.lon]),
         );
+        const obscured = options.getObscuredBottomPx?.() ?? 0;
         leafletMap.fitBounds(bounds, {
           maxZoom: DEFAULT_ZOOM,
           padding: [40, 40],
+          // `fitBounds` already understands "padding" as space to leave
+          // clear — unlike the pixel-math `setGpsPosition` needs, this is
+          // Leaflet's own native mechanism, just fed the bottom sheet's
+          // live height as extra bottom-edge padding.
+          paddingBottomRight: [40, 40 + obscured],
         });
         hasCenteredOnce = true;
       }
@@ -315,7 +385,12 @@ export function createTourMap(
         // recover from that, so force the last known fix back to centre now
         // that the real size is known.
         if (lastPosition && leafletMap) {
-          leafletMap.setView(lastPosition, leafletMap.getZoom());
+          const zoom = leafletMap.getZoom();
+          const obscured = options.getObscuredBottomPx?.() ?? 0;
+          leafletMap.setView(
+            offsetTargetForObscuredBottom(leafletMap, lastPosition, zoom, obscured),
+            zoom,
+          );
         }
       });
     },
