@@ -138,7 +138,11 @@ export function mountOnboardingGate(
   startButton.dataset["testid"] = "start";
   startButton.textContent = "Start";
 
-  root.append(cameraRow.root, gpsRow.root, grantButton, startButton);
+  const permList = document.createElement("div");
+  permList.className = "perm-list";
+  permList.append(cameraRow.root, gpsRow.root);
+
+  root.append(permList, grantButton, startButton);
 
   const dispatch = (action: GateAction): void => {
     if (destroyed) return;

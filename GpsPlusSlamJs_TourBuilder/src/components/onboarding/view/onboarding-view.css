@@ -21,11 +21,21 @@
   border-radius: 10px;
 }
 
+/* No gap here (unlike .gate-card): the border-bottom divider must sit
+   centered between the two rows, i.e. equal padding above/below it. A
+   grid/flex gap on top of that padding would push the divider toward the
+   camera row instead of centering it. */
+.perm-list {
+  display: grid;
+}
+
 .perm-row {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 8px 0;
+  /* Matches .gate-card's gap token so row-to-divider spacing equals
+     top-row-to-card-top and last-row-to-button spacing. */
+  padding: clamp(8px, 2.667px + 1.6667vw, 12px) 0;
   border-bottom: 1px solid #2a3550;
 }
 
