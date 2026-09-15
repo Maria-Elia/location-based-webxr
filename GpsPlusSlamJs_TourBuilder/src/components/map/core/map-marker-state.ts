@@ -22,6 +22,10 @@ export interface WaypointMarkerViewModel {
   readonly id: string;
   readonly position: Waypoint["position"];
   readonly status: WaypointMarkerStatus;
+  /** 1-based position in the draft's own waypoint list — an authoring
+   *  convenience only (contract D3: proximity activation is distance-based,
+   *  never order-based), so a Viewing-mode marker never needs it. */
+  readonly order: number;
 }
 
 /** Pure. Same inputs → same output. Preserves the input waypoint order. */
@@ -31,7 +35,7 @@ export function computeMarkerViewModels(
   nextId: string | null,
 ): readonly WaypointMarkerViewModel[] {
   const visited = new Set(visitedIds);
-  return waypoints.map((wp) => ({
+  return waypoints.map((wp, index) => ({
     id: wp.id,
     position: wp.position,
     status: visited.has(wp.id)
@@ -39,5 +43,6 @@ export function computeMarkerViewModels(
       : wp.id === nextId
         ? "next"
         : "unvisited",
+    order: index + 1,
   }));
 }

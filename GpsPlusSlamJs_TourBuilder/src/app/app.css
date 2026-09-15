@@ -562,15 +562,82 @@ p[data-testid="qr-status"] {
   gap: var(--space-3);
 }
 
-/* ── Authoring tools shell ────────────────────────────────────────────── */
+/* ── Authoring tools shell (full-bleed map + floating panel) ─────────────
+   The map IS the screen: it fills the real viewport (not the padded
+   560px column every other screen sits in — see the `#app-root >
+   .tools-shell` override below), and Tour Details/Waypoints/Export float
+   on top of it in a panel the author can pan/zoom the map underneath.
+   A sidebar on desktop, a bottom sheet on phone (breakpoint below). */
 
 .tools-shell {
-  display: grid;
-  gap: var(--space-4);
+  position: fixed;
+  inset: 0;
+}
+
+/* `#app-root > *` (the shared centered-column rule) is an ID selector and
+   would otherwise beat a bare `.tools-shell` class, so the override has to
+   be qualified the same way to actually win — same reasoning as the
+   demo-tour chip's width override above. */
+#app-root > .tools-shell {
+  width: 100%;
+  max-width: none;
+  margin: 0;
 }
 
 .map-shell {
-  position: relative;
+  position: absolute;
+  inset: 0;
+  /* `.tools-shell` (position:fixed) is the only stacking context here —
+     without a z-index of its own, this absolutely-positioned wrapper does
+     NOT start a new one, so Leaflet's internal panes/controls (z-index
+     200–1000) would otherwise compare directly against the floating
+     panel's z-index:20 in that same context and paint over it. Trap them
+     inside their own low context instead. */
+  z-index: 0;
+}
+
+/* Leaflet's zoom buttons crowd a phone screen that already has pinch-zoom
+   and a bottom sheet competing for the same thumb region; desktop keeps
+   them (repositioned to bottom-right in tour-map.ts, clear of the GPS
+   badge and the sidebar). */
+@media (max-width: 720px) {
+  .leaflet-control-zoom {
+    display: none;
+  }
+}
+
+/* Leaflet's popup ships light-themed (white card, black tip) by default —
+   only the click-to-place pin uses a real popup on this screen, so this is
+   scoped to the full-bleed map rather than a blanket override every future
+   popup must also fit. Scoped under `.map-card-fullscreen` (not just a
+   bare `.leaflet-popup-*` class) so it wins regardless of load order: Vite
+   dev mode injects `leaflet.css` as a `<style>` tag AFTER this file (it's
+   imported from `authoring-app.ts`, which loads later in the dependency
+   graph), and two same-specificity rules resolve by source order — a bare
+   override here would lose to Leaflet's own default every time. */
+.map-pending-pin-button {
+  min-height: 36px;
+  padding: var(--space-2) var(--space-4);
+}
+
+.map-card-fullscreen .leaflet-popup-content-wrapper,
+.map-card-fullscreen .leaflet-popup-tip {
+  background: var(--bg);
+  color: var(--text);
+  box-shadow: 0 8px 20px rgb(0 0 0 / 45%);
+}
+
+.map-card-fullscreen .leaflet-popup-content-wrapper {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.map-card-fullscreen .leaflet-popup-content {
+  margin: var(--space-3);
+}
+
+.map-card-fullscreen .leaflet-popup-close-button {
+  color: var(--text-muted);
 }
 
 .map-card {
@@ -589,6 +656,21 @@ p[data-testid="qr-status"] {
 .map-card-flush {
   padding: 0;
   overflow: hidden;
+}
+
+/* The full-bleed variant of `.map-card` (still Leaflet's own container
+   element) — kept as its own modifier rather than changed in place
+   because `.map-card` is also the small floating map on Viewing mode's
+   entry screen and in-session HUD, which must keep their own size. Must
+   come AFTER the `.map-card` base rule above: both are single-class
+   selectors of equal specificity, so source order decides, and this one
+   needs to win. */
+.map-card-fullscreen {
+  position: absolute;
+  inset: 0;
+  height: auto;
+  border: none;
+  border-radius: 0;
 }
 
 .map-badge {
@@ -635,16 +717,54 @@ p[data-testid="qr-status"] {
 
 /* ── Authoring view (component 10 — styled via its own classNames) ──────── */
 
+/* The floating panel itself — a sidebar top-right on desktop, a bottom
+   sheet full-width on phone (breakpoint below). Opaque (`--bg`, not
+   `--surface`) so a busy waypoint list stays legible over the map tiles
+   underneath, and it carries its own elevation since it's the one card
+   genuinely floating over other content on this screen. */
 .authoring-sections {
-  display: grid;
+  position: fixed;
+  z-index: 20;
+  top: var(--space-4);
+  right: var(--space-4);
+  width: 380px;
+  max-width: calc(100vw - 2 * var(--space-4));
+  max-height: calc(100dvh - 2 * var(--space-4));
+  display: flex;
+  flex-direction: column;
   gap: var(--space-4);
-}
-
-.authoring-section {
+  overflow-y: auto;
   padding: var(--space-fluid-4);
-  background: var(--surface);
+  background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 45%);
+}
+
+@media (max-width: 720px) {
+  .authoring-sections {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    max-width: none;
+    max-height: 65dvh;
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+    padding: var(--space-fluid-4) var(--space-fluid-4)
+      calc(var(--space-fluid-4) + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* Sections are grouped by a divider, not nested cards — the panel above is
+   already the card. */
+.authoring-section {
+  padding: 0;
+}
+
+.authoring-section + .authoring-section {
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
 }
 
 .authoring-section h2,
@@ -655,6 +775,46 @@ p[data-testid="qr-status"] {
   text-transform: uppercase;
   font-weight: 400;
   color: var(--text-muted);
+}
+
+/* Tour Details' own collapsible header/body — collapsed by default so it
+   never occupies panel space the author didn't ask for (see `wp-header`/
+   `wp-chevron`/`wp-body` below, the same disclosure the waypoint cards
+   use; kept as separate classes since "details" isn't waypoint-specific). */
+.details-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+  user-select: none;
+}
+
+.details-header h2 {
+  margin: 0;
+  flex: 1;
+}
+
+.details-chevron {
+  display: flex;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.authoring-section.open .details-chevron {
+  transform: rotate(90deg);
+}
+
+.details-body {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height var(--duration-base) var(--ease-out);
+}
+
+.authoring-section.open .details-body {
+  max-height: 400px;
+  overflow: visible;
+  margin-top: var(--space-3);
 }
 
 .waypoints-heading {
@@ -720,6 +880,57 @@ p[data-testid="qr-status"] {
   color: var(--text-muted);
   flex-shrink: 0;
   transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.wp-drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* The grip glyph itself is 14px; the grabbable target is a real 36px box
+     around it — a bare 14px hitbox is precise to the point of unusable,
+     especially by touch. Stops short of the app's usual 44px tap target
+     on purpose: a true 44px box here would either overlap the chevron via
+     negative margins (clickable-but-invisible overlap onto a neighboring
+     control) or grow every card's header by ~30px just to fit it; 36px
+     already turns "hit 6 tiny dots" into "hit a real target" without
+     either cost. */
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  flex-shrink: 0;
+  cursor: grab;
+  transition: background var(--duration-base) var(--ease-out);
+  /* Without this, a touch press-and-hold on the handle starts the
+     browser's own scroll/pan gesture instead of the drag — the one thing
+     a drag handle exists to prevent. */
+  touch-action: none;
+}
+
+.wp-drag-handle:hover,
+.wp-drag-handle:active {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.wp-drag-handle:active {
+  cursor: grabbing;
+}
+
+.waypoint-card.dragging {
+  transform: scale(1.02);
+  box-shadow: 0 12px 28px rgb(0 0 0 / 55%);
+  cursor: grabbing;
+  pointer-events: none;
+}
+
+/* Holds the dragged card's old slot open (matched height, set inline in
+   authoring-view.ts) while it floats free — the other cards FLIP-animate
+   around this, not around the floating card itself. */
+.wp-drag-placeholder {
+  border: 1.5px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: rgb(255 255 255 / 2%);
 }
 
 .waypoint-card.open .wp-chevron {

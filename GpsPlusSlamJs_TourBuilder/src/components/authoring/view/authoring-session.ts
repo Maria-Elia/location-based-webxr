@@ -36,9 +36,11 @@ export interface AuthoringSessionDeps {
 }
 
 export interface AuthoringSession {
-  /** Drop a waypoint at the latest known position. Returns the new
-   *  waypoint's id, or null if no fix has arrived yet. */
-  dropWaypoint(): string | null;
+  /** Drop a waypoint at `position`, or at the latest known GPS fix when
+   *  omitted (the walk-there-and-press flow). Returns the new waypoint's
+   *  id, or null if no position is available (no override given and no fix
+   *  has arrived yet). */
+  dropWaypoint(position?: TourCoord): string | null;
   attachAsset(waypointId: string, slot: AssetSlot, file: File): void;
   exportTour(): { tour: Tour; assetFiles: ReadonlyMap<AssetId, File> };
   destroy(): void;
@@ -64,13 +66,14 @@ export function createAuthoringSession(
   });
 
   return {
-    dropWaypoint(): string | null {
-      if (current === null) return null;
+    dropWaypoint(position?: TourCoord): string | null {
+      const pos = position ?? current;
+      if (pos === null) return null;
       const id = nextId(
         "wp",
         state().waypoints.map((w) => w.id),
       );
-      deps.dispatch(addWaypoint({ id, position: current }));
+      deps.dispatch(addWaypoint({ id, position: pos }));
       return id;
     },
 

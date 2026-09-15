@@ -20,11 +20,15 @@ import {
 import { buildMapData } from "gps-plus-slam-app-framework/visualization/map-data";
 
 import { createAuthoringStore } from "../../store/authoring-store.js";
+import { updateWaypoint } from "../../store/authoring-slice.js";
 import type { TourCoord } from "../../store/types.js";
 import { mountOnboardingGate } from "../../components/onboarding/view/onboarding-view.js";
 import { createLiveGpsPositionSource } from "../../components/authoring/view/gps-position-source.js";
 import { createFilesAssetProvider } from "../../components/authoring/view/files-asset-provider.js";
-import { createAuthoringSession } from "../../components/authoring/view/authoring-session.js";
+import {
+  createAuthoringSession,
+  type AuthoringSession,
+} from "../../components/authoring/view/authoring-session.js";
 import { mountAuthoringView } from "../../components/authoring/view/authoring-view.js";
 import { computeMarkerViewModels } from "../../components/map/core/map-marker-state.js";
 import { createTourMap } from "../../components/map/view/tour-map.js";
@@ -166,13 +170,27 @@ async function mountAuthoringTools(
   toolsHost.appendChild(mapShell);
 
   const mapHost = document.createElement("div");
-  mapHost.className = "map-card map-card-flush";
+  mapHost.className = "map-card map-card-flush map-card-fullscreen";
   mapShell.appendChild(mapHost);
-  // Non-interactive: this map is a live-position preview while authoring,
-  // not something to pan/zoom, and leaving Leaflet's touch dragging on
-  // means a swipe starting over the map pans the map instead of scrolling
-  // the page (see tour-map.ts's `interactive` option).
-  const tourMap = createTourMap(mapHost, { interactive: false });
+  // `session` is created below (it needs the map's own `withMapSync`
+  // position source first) but the map's click handler needs `session` —
+  // resolved via this forward reference: the handler only ever runs on a
+  // real user click, well after `session` is assigned further down.
+  let session: AuthoringSession | undefined;
+  // Full-bleed and interactive: the map IS the authoring screen now, so
+  // the author can pan/zoom to see the route, drag a marker to fine-tune
+  // its position, or click an empty spot to drop one exactly there — three
+  // ways to place a waypoint, alongside walking to the spot and pressing
+  // Drop Waypoint.
+  const tourMap = createTourMap(mapHost, {
+    interactive: true,
+    onWaypointDragEnd: (id, lat, lon) => {
+      dispatch(updateWaypoint({ id, changes: { position: { lat, lon } } }));
+    },
+    onDropWaypointHere: (lat, lon) => {
+      session?.dropWaypoint({ lat, lon });
+    },
+  });
   tourMap?.show();
 
   // AC13: explicit waiting state until the first live GPS fix arrives —
@@ -215,7 +233,7 @@ async function mountAuthoringTools(
   };
 
   const filesAssetProvider = createFilesAssetProvider();
-  const session = createAuthoringSession({
+  session = createAuthoringSession({
     positionSource: withMapSync,
     dispatch,
     getState: store.getState,

@@ -35,21 +35,37 @@ function createMockTileLayer() {
 }
 
 function createMockMarker() {
+  const listeners: Record<string, Array<() => void>> = {};
   return {
     addTo: vi.fn().mockReturnThis(),
     remove: vi.fn(),
     bindPopup: vi.fn().mockReturnThis(),
+    openPopup: vi.fn().mockReturnThis(),
     getLatLng: vi.fn(() => ({ lat: 0, lng: 0 })),
+    on: vi.fn((event: string, cb: () => void) => {
+      (listeners[event] ??= []).push(cb);
+    }),
+    _fire(event: string) {
+      for (const cb of listeners[event] ?? []) cb();
+    },
   };
 }
 
 function createMockMap() {
+  const listeners: Record<string, Array<(e: unknown) => void>> = {};
   return {
     setView: vi.fn().mockReturnThis(),
     panTo: vi.fn().mockReturnThis(),
     fitBounds: vi.fn().mockReturnThis(),
     remove: vi.fn(),
     invalidateSize: vi.fn(),
+    zoomControl: { setPosition: vi.fn() },
+    on: vi.fn((event: string, cb: (e: unknown) => void) => {
+      (listeners[event] ??= []).push(cb);
+    }),
+    _fire(event: string, payload: unknown) {
+      for (const cb of listeners[event] ?? []) cb(payload);
+    },
   };
 }
 
@@ -158,8 +174,8 @@ describe("createTourMap", () => {
   it("setWaypoints places one marker per view-model at the expected lat/lon", () => {
     const map = createTourMap(container)!;
     const models: WaypointMarkerViewModel[] = [
-      { id: "wp-1", position: { lat: 1, lon: 2 }, status: "unvisited" },
-      { id: "wp-2", position: { lat: 3, lon: 4 }, status: "visited" },
+      { id: "wp-1", position: { lat: 1, lon: 2 }, status: "unvisited", order: 1 },
+      { id: "wp-2", position: { lat: 3, lon: 4 }, status: "visited", order: 2 },
     ];
 
     map.setWaypoints(models);
@@ -172,9 +188,9 @@ describe("createTourMap", () => {
   it("gives each marker status its own icon color", () => {
     const map = createTourMap(container)!;
     const models: WaypointMarkerViewModel[] = [
-      { id: "wp-1", position: { lat: 1, lon: 1 }, status: "unvisited" },
-      { id: "wp-2", position: { lat: 2, lon: 2 }, status: "next" },
-      { id: "wp-3", position: { lat: 3, lon: 3 }, status: "visited" },
+      { id: "wp-1", position: { lat: 1, lon: 1 }, status: "unvisited", order: 1 },
+      { id: "wp-2", position: { lat: 2, lon: 2 }, status: "next", order: 2 },
+      { id: "wp-3", position: { lat: 3, lon: 3 }, status: "visited", order: 3 },
     ];
 
     map.setWaypoints(models);
@@ -189,11 +205,113 @@ describe("createTourMap", () => {
     expect(htmls[1]).not.toContain("✓");
   });
 
+  it("labels an unvisited/next marker with its 1-based list position, not visited (which keeps the checkmark)", () => {
+    const map = createTourMap(container)!;
+    map.setWaypoints([
+      { id: "wp-1", position: { lat: 1, lon: 1 }, status: "unvisited", order: 1 },
+      { id: "wp-2", position: { lat: 2, lon: 2 }, status: "next", order: 2 },
+      { id: "wp-3", position: { lat: 3, lon: 3 }, status: "visited", order: 3 },
+    ]);
+
+    const htmls = divIconCallArgs.map((d) => d.html);
+    expect(htmls[0]).toContain(">1<");
+    expect(htmls[1]).toContain(">2<");
+    expect(htmls[2]).not.toContain(">3<");
+  });
+
+  it("markers are not draggable when no onWaypointDragEnd is given", () => {
+    const map = createTourMap(container)!;
+    map.setWaypoints([
+      { id: "wp-1", position: { lat: 1, lon: 1 }, status: "unvisited", order: 1 },
+    ]);
+
+    expect(
+      (markerCallArgs[0]!.options as { draggable: boolean }).draggable,
+    ).toBe(false);
+  });
+
+  it("markers become draggable and report their dropped position when onWaypointDragEnd is given", () => {
+    const onWaypointDragEnd = vi.fn();
+    const map = createTourMap(container, { onWaypointDragEnd })!;
+    map.setWaypoints([
+      { id: "wp-1", position: { lat: 1, lon: 1 }, status: "unvisited", order: 1 },
+    ]);
+
+    expect(
+      (markerCallArgs[0]!.options as { draggable: boolean }).draggable,
+    ).toBe(true);
+
+    markerInstances[0]!.getLatLng.mockReturnValue({ lat: 9, lng: 8 });
+    markerInstances[0]!._fire("dragend");
+
+    expect(onWaypointDragEnd).toHaveBeenCalledWith("wp-1", 9, 8);
+  });
+
+  it("moves the zoom control out of the GPS badge's corner when interactive", () => {
+    createTourMap(container, { interactive: true });
+    expect(lastMapInstance.zoomControl.setPosition).toHaveBeenCalledWith(
+      "bottomright",
+    );
+  });
+
+  it("leaves the zoom control alone when non-interactive", () => {
+    createTourMap(container, { interactive: false });
+    expect(lastMapInstance.zoomControl.setPosition).not.toHaveBeenCalled();
+  });
+
+  it("does nothing on a map click when no onDropWaypointHere is given", () => {
+    createTourMap(container);
+    lastMapInstance._fire("click", { latlng: { lat: 1, lng: 2 } });
+    expect(markerCallArgs.length).toBe(0);
+  });
+
+  it("clicking the map drops a preview pin with an open 'Drop Waypoint' popup, and confirming it reports the clicked position", () => {
+    const onDropWaypointHere = vi.fn();
+    createTourMap(container, { onDropWaypointHere });
+
+    lastMapInstance._fire("click", { latlng: { lat: 1, lng: 2 } });
+
+    expect(markerCallArgs.length).toBe(1);
+    expect(markerCallArgs[0]!.latlng).toEqual({ lat: 1, lng: 2 });
+    const pin = markerInstances[0]!;
+    expect(pin.openPopup).toHaveBeenCalledOnce();
+
+    const button = pin.bindPopup.mock.calls[0]![0] as HTMLButtonElement;
+    expect(button.textContent).toBe("Drop Waypoint");
+    button.click();
+
+    expect(onDropWaypointHere).toHaveBeenCalledWith(1, 2);
+    expect(pin.remove).toHaveBeenCalledOnce();
+  });
+
+  it("clicking the map again replaces the previous preview pin", () => {
+    createTourMap(container, { onDropWaypointHere: vi.fn() });
+
+    lastMapInstance._fire("click", { latlng: { lat: 1, lng: 2 } });
+    const firstPin = markerInstances[0]!;
+    lastMapInstance._fire("click", { latlng: { lat: 3, lng: 4 } });
+
+    expect(firstPin.remove).toHaveBeenCalledOnce();
+    expect(markerCallArgs.length).toBe(2);
+  });
+
+  it("closing the preview pin's popup clears it without reporting a position", () => {
+    const onDropWaypointHere = vi.fn();
+    createTourMap(container, { onDropWaypointHere });
+
+    lastMapInstance._fire("click", { latlng: { lat: 1, lng: 2 } });
+    const pin = markerInstances[0]!;
+    pin._fire("popupclose");
+
+    expect(pin.remove).toHaveBeenCalledOnce();
+    expect(onDropWaypointHere).not.toHaveBeenCalled();
+  });
+
   it("setWaypoints centers the map on the waypoints before any GPS fix arrives", () => {
     const map = createTourMap(container)!;
     map.setWaypoints([
-      { id: "wp-1", position: { lat: 1, lon: 1 }, status: "unvisited" },
-      { id: "wp-2", position: { lat: 2, lon: 2 }, status: "unvisited" },
+      { id: "wp-1", position: { lat: 1, lon: 1 }, status: "unvisited", order: 1 },
+      { id: "wp-2", position: { lat: 2, lon: 2 }, status: "unvisited", order: 2 },
     ]);
 
     expect(lastMapInstance.fitBounds).toHaveBeenCalledOnce();
@@ -203,7 +321,7 @@ describe("createTourMap", () => {
     const map = createTourMap(container)!;
     map.setGpsPosition(52.5163, 13.3777);
     map.setWaypoints([
-      { id: "wp-1", position: { lat: 1, lon: 1 }, status: "unvisited" },
+      { id: "wp-1", position: { lat: 1, lon: 1 }, status: "unvisited", order: 1 },
     ]);
 
     expect(lastMapInstance.fitBounds).not.toHaveBeenCalled();
@@ -212,12 +330,12 @@ describe("createTourMap", () => {
   it("setWaypoints replaces the previous marker layer wholesale", () => {
     const map = createTourMap(container)!;
     map.setWaypoints([
-      { id: "wp-1", position: { lat: 1, lon: 1 }, status: "unvisited" },
+      { id: "wp-1", position: { lat: 1, lon: 1 }, status: "unvisited", order: 1 },
     ]);
     const firstMarker = markerInstances[0]!;
 
     map.setWaypoints([
-      { id: "wp-2", position: { lat: 2, lon: 2 }, status: "unvisited" },
+      { id: "wp-2", position: { lat: 2, lon: 2 }, status: "unvisited", order: 1 },
     ]);
 
     expect(firstMarker.remove).toHaveBeenCalledOnce();

@@ -99,6 +99,27 @@ const authoringSlice = createSlice({
       state.waypoints = state.waypoints.filter((w) => w.id !== action.payload);
     },
 
+    /** Reorders the draft's own waypoint list — the numbering shown in the
+     *  panel and on the map. Purely an authoring convenience: proximity
+     *  activation is distance-based, never order-based (plan D3), so this
+     *  never changes when a waypoint's content unlocks in the field. */
+    moveWaypoint(
+      state,
+      action: PayloadAction<{ id: string; toIndex: number }>,
+    ) {
+      const fromIndex = state.waypoints.findIndex(
+        (w) => w.id === action.payload.id,
+      );
+      if (fromIndex === -1) return;
+      const clampedTo = Math.max(
+        0,
+        Math.min(action.payload.toIndex, state.waypoints.length - 1),
+      );
+      if (clampedTo === fromIndex) return;
+      const [moved] = state.waypoints.splice(fromIndex, 1);
+      state.waypoints.splice(clampedTo, 0, moved!);
+    },
+
     attachAsset(
       state,
       action: PayloadAction<{
@@ -157,6 +178,7 @@ export const {
   addWaypoint,
   updateWaypoint,
   removeWaypoint,
+  moveWaypoint,
   attachAsset,
   removeAsset,
   addBreadcrumbPoint,

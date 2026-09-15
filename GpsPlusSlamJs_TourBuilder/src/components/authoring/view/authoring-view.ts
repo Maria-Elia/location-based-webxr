@@ -19,6 +19,7 @@ import {
   setTourMeta,
   updateWaypoint,
   removeWaypoint,
+  moveWaypoint,
   removeAsset,
   type AuthoringSliceState,
 } from "../../../store/authoring-slice.js";
@@ -36,6 +37,7 @@ type AuthoringViewAction =
   | ReturnType<typeof setTourMeta>
   | ReturnType<typeof updateWaypoint>
   | ReturnType<typeof removeWaypoint>
+  | ReturnType<typeof moveWaypoint>
   | ReturnType<typeof removeAsset>;
 
 interface AuthoringViewSession {
@@ -103,6 +105,11 @@ export function mountAuthoringView(
    *  every collapse/expand would defeat the whole point of keeping it
    *  independent from unrelated store updates. */
   let expandedId: string | null = null;
+
+  /** Cards whose header `click` (the one that always follows a pointerup,
+   *  browser-native) must NOT toggle the accordion because that pointerup
+   *  actually ended a press-and-hold drag, not a tap — see `wireDragReorder`. */
+  const dragJustHappened = new Set<HTMLElement>();
 
   function attachedFilename(
     authoring: AuthoringSliceState,
@@ -284,9 +291,28 @@ export function mountAuthoringView(
     header.className = "wp-header";
     header.dataset["testid"] = `wp-toggle-${wp.id}`;
     header.addEventListener("click", () => {
+      // A press-and-hold-to-drag gesture on this same header (below) also
+      // ends in a `click` once the pointer lifts — without this check that
+      // click would toggle the accordion right after every drag.
+      if (dragJustHappened.has(card)) {
+        dragJustHappened.delete(card);
+        return;
+      }
       expandedId = isOpen ? null : wp.id;
       render();
     });
+
+    // Effortless reordering: press-and-drag the grip to pick the card up
+    // and drop it anywhere else in the list (`wireDragReorder`, attached
+    // once per render of the whole list, below). A `click` on the handle
+    // alone (no drag) would otherwise bubble to the header and toggle the
+    // accordion, so that's swallowed here too.
+    const dragHandle = document.createElement("span");
+    dragHandle.className = "wp-drag-handle";
+    dragHandle.dataset["testid"] = `wp-drag-handle-${wp.id}`;
+    dragHandle.setAttribute("aria-label", "Reorder waypoint");
+    dragHandle.innerHTML = ICONS.grip;
+    dragHandle.addEventListener("click", (event) => event.stopPropagation());
 
     const chevron = document.createElement("span");
     chevron.className = "wp-chevron";
@@ -306,7 +332,7 @@ export function mountAuthoringView(
       deps.dispatch(removeWaypoint(wp.id));
     });
 
-    header.append(chevron, title, buildSummary(wp), removeButton);
+    header.append(dragHandle, chevron, title, buildSummary(wp), removeButton);
     card.append(header);
 
     const body = document.createElement("div");
@@ -414,6 +440,217 @@ export function mountAuthoringView(
     return card;
   }
 
+  /** How long a displaced card's FLIP settle-into-place animation runs. */
+  const REORDER_ANIM_MS = 220;
+  /** How long a press on the card body (NOT the grip) must hold before it
+   *  commits to a drag rather than a tap-to-expand — long enough that a
+   *  normal tap or a scroll-swipe never accidentally grabs the card, short
+   *  enough that a real "I want to move this" press still feels immediate. */
+  const HOLD_TO_DRAG_MS = 220;
+  /** A press on the card body that moves this many px before the hold
+   *  delay elapses also commits to a drag right away — no need to sit
+   *  still and wait once the intent is already obvious. */
+  const HOLD_MOVE_THRESHOLD_PX = 10;
+
+  /**
+   * Effortless reordering: the grip handle always drags immediately, but
+   * so does a **press-and-hold anywhere else on the card's header** — a
+   * quick tap there still opens/closes the card as before, the header's
+   * own `click` handler tells the two apart via `dragJustHappened`. Aiming
+   * for a specific small handle is real friction (worse on a phone); a
+   * press-and-hold on the whole row removes the aiming requirement
+   * entirely, which is why the handle is a secondary affordance here, not
+   * the only way in.
+   *
+   * However it starts, dragging works the same way: the card lifts out of
+   * the list, following the pointer 1:1 while a dashed placeholder holds
+   * its old slot open; every other card slides smoothly (FLIP — measure,
+   * mutate, invert the jump into a transform, then animate that transform
+   * to zero) out of the way as the placeholder moves past their midpoint.
+   * Releasing drops the card into the placeholder's slot and dispatches
+   * exactly one `moveWaypoint`, which the next render() from the store
+   * then simply confirms. Pointer Events (not HTML5 `draggable`) because
+   * this app's primary surface is a phone, and native drag-and-drop has no
+   * touch support at all.
+   */
+  function wireDragReorder(list: HTMLElement): void {
+    let dragging: HTMLElement | null = null;
+    let placeholder: HTMLElement | null = null;
+    let pointerStartY = 0;
+    let cardStartTop = 0;
+
+    function others(): HTMLElement[] {
+      return Array.from(list.children).filter(
+        (el) => el !== dragging && el !== placeholder,
+      ) as HTMLElement[];
+    }
+
+    /** Runs `mutate` (a DOM reorder of the non-dragged cards), then FLIPs
+     *  every card whose position it changed into a smooth slide. */
+    function flip(mutate: () => void): void {
+      const before = new Map(others().map((el) => [el, el.getBoundingClientRect().top]));
+      mutate();
+      for (const el of others()) {
+        const from = before.get(el);
+        if (from === undefined) continue;
+        const to = el.getBoundingClientRect().top;
+        const delta = from - to;
+        if (delta === 0) continue;
+        el.style.transition = "none";
+        el.style.transform = `translateY(${delta}px)`;
+        requestAnimationFrame(() => {
+          el.style.transition = `transform ${REORDER_ANIM_MS}ms var(--ease-out)`;
+          el.style.transform = "";
+        });
+      }
+    }
+
+    function movePlaceholderTo(y: number): void {
+      if (!placeholder) return;
+      flip(() => {
+        for (const card of others()) {
+          const rect = card.getBoundingClientRect();
+          if (y < rect.top + rect.height / 2) {
+            list.insertBefore(placeholder!, card);
+            return;
+          }
+        }
+        list.append(placeholder!); // past every sibling's midpoint: goes last
+      });
+    }
+
+    function onPointerMove(event: PointerEvent): void {
+      if (!dragging) return;
+      dragging.style.top = `${cardStartTop + (event.clientY - pointerStartY)}px`;
+      movePlaceholderTo(event.clientY);
+    }
+
+    function endDrag(): void {
+      if (!dragging || !placeholder) return;
+      const card = dragging;
+      const slot = placeholder;
+      dragging = null;
+      placeholder = null;
+
+      // The placeholder's index among everyone EXCEPT the still-present
+      // fixed-position `card` — `card` itself would otherwise double-count
+      // (it's still a DOM child, appended after its own placeholder since
+      // pointerdown) and throw this off by one.
+      const toIndex = Array.from(list.children)
+        .filter((el) => el !== card)
+        .indexOf(slot);
+      slot.replaceWith(card);
+      card.classList.remove("dragging");
+      card.style.position = "";
+      card.style.top = "";
+      card.style.left = "";
+      card.style.width = "";
+      card.style.zIndex = "";
+
+      document.removeEventListener("pointermove", onPointerMove);
+      document.removeEventListener("pointerup", endDrag);
+      document.removeEventListener("pointercancel", endDrag);
+
+      const id = card.dataset["testid"]!.replace("waypoint-", "");
+      deps.dispatch(moveWaypoint({ id, toIndex }));
+    }
+
+    function beginDrag(card: HTMLElement, clientY: number): void {
+      const rect = card.getBoundingClientRect();
+
+      const slot = document.createElement("div");
+      slot.className = "wp-drag-placeholder";
+      slot.style.height = `${rect.height}px`;
+      card.replaceWith(slot);
+      placeholder = slot;
+
+      dragging = card;
+      pointerStartY = clientY;
+      cardStartTop = rect.top;
+      dragJustHappened.add(card);
+      card.classList.add("dragging");
+      card.style.position = "fixed";
+      card.style.top = `${rect.top}px`;
+      card.style.left = `${rect.left}px`;
+      card.style.width = `${rect.width}px`;
+      card.style.zIndex = "30";
+      // The lifted card floats outside `list` in stacking terms (fixed),
+      // so it needs somewhere to still live in the DOM while dragging —
+      // append it back to `list` after its own placeholder.
+      list.append(card);
+
+      document.addEventListener("pointermove", onPointerMove);
+      document.addEventListener("pointerup", endDrag);
+      document.addEventListener("pointercancel", endDrag);
+    }
+
+    for (const card of Array.from(list.children) as HTMLElement[]) {
+      const handle = card.querySelector<HTMLElement>(".wp-drag-handle");
+      const header = card.querySelector<HTMLElement>(".wp-header");
+
+      // The grip: always starts a drag immediately, no aiming ambiguity —
+      // that's the point of a dedicated handle.
+      handle?.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        beginDrag(card, event.clientY);
+      });
+
+      // The rest of the header: a quick tap still opens/closes the card
+      // (native `click`, untouched); holding past HOLD_TO_DRAG_MS — or
+      // moving HOLD_MOVE_THRESHOLD_PX before that timer fires — commits to
+      // a drag instead. Ignores presses that started on the handle (it
+      // already has its own listener above) or the remove button (its own
+      // unrelated action).
+      header?.addEventListener("pointerdown", (event) => {
+        const target = event.target as HTMLElement | null;
+        if (target === null) return;
+        if (handle?.contains(target)) return;
+        if (target.closest(".icon-btn")) return;
+
+        const startX = event.clientX;
+        const startY = event.clientY;
+        const pointerId = event.pointerId;
+        let settled = false;
+
+        const timer = setTimeout(() => {
+          if (settled) return;
+          settled = true;
+          cleanup();
+          beginDrag(card, startY);
+        }, HOLD_TO_DRAG_MS);
+
+        function onMove(moveEvent: PointerEvent): void {
+          if (moveEvent.pointerId !== pointerId || settled) return;
+          const dx = moveEvent.clientX - startX;
+          const dy = moveEvent.clientY - startY;
+          if (Math.hypot(dx, dy) < HOLD_MOVE_THRESHOLD_PX) return;
+          settled = true;
+          cleanup();
+          beginDrag(card, moveEvent.clientY);
+        }
+
+        function onRelease(releaseEvent: PointerEvent): void {
+          if (releaseEvent.pointerId !== pointerId) return;
+          settled = true;
+          cleanup();
+          // Too quick/too still to be a drag — a normal tap. Nothing to
+          // do: the browser's own `click` (toggle) follows on its own.
+        }
+
+        function cleanup(): void {
+          clearTimeout(timer);
+          document.removeEventListener("pointermove", onMove);
+          document.removeEventListener("pointerup", onRelease);
+          document.removeEventListener("pointercancel", onRelease);
+        }
+
+        document.addEventListener("pointermove", onMove);
+        document.addEventListener("pointerup", onRelease);
+        document.addEventListener("pointercancel", onRelease);
+      });
+    }
+  }
+
   function renderWaypointsSection(authoring: AuthoringSliceState): HTMLElement {
     const section = document.createElement("section");
     section.className = "authoring-section";
@@ -448,6 +685,12 @@ export function mountAuthoringView(
     heading.append(h2, dropButton);
     section.append(heading);
 
+    const placementHint = document.createElement("p");
+    placementHint.className = "visual-hint";
+    placementHint.textContent =
+      "Walk to the spot and tap Drop Waypoint, click the map, or drag an existing pin to fine-tune it. Press and hold a card to reorder the list.";
+    section.append(placementHint);
+
     if (authoring.waypoints.length === 0) {
       const empty = document.createElement("p");
       empty.className = "empty-state";
@@ -461,6 +704,7 @@ export function mountAuthoringView(
         list.append(renderWaypointCard(authoring, wp, index));
       });
       section.append(list);
+      wireDragReorder(list);
     }
 
     return section;
@@ -470,11 +714,33 @@ export function mountAuthoringView(
     authoring: AuthoringSliceState,
   ): HTMLElement {
     const section = document.createElement("section");
-    section.className = "authoring-section";
+    section.className = `authoring-section${tourDetailsOpen ? " open" : ""}`;
+
+    // Collapsed by default: the floating panel is small real estate and a
+    // name/description pair the author sets once shouldn't permanently
+    // outrank the waypoint list it shares the panel with. Same disclosure
+    // interaction as a waypoint card (chevron rotates, body's max-height
+    // opens), just under neutral `details-*` classes since this section
+    // isn't waypoint-specific.
+    const header = document.createElement("div");
+    header.className = "details-header";
+    header.dataset["testid"] = "tour-details-toggle";
+    header.addEventListener("click", () => {
+      tourDetailsOpen = !tourDetailsOpen;
+      render();
+    });
+
+    const chevron = document.createElement("span");
+    chevron.className = "details-chevron";
+    chevron.innerHTML = ICONS.chevron;
 
     const heading = document.createElement("h2");
     heading.textContent = "Tour Details";
-    section.append(heading);
+    header.append(chevron, heading);
+    section.append(header);
+
+    const body = document.createElement("div");
+    body.className = "details-body";
 
     const nameInput = document.createElement("input");
     nameInput.dataset["testid"] = "tour-name";
@@ -487,7 +753,7 @@ export function mountAuthoringView(
         }),
       );
     });
-    section.append(buildLabeledField("Name", nameInput, "tour-name"));
+    body.append(buildLabeledField("Name", nameInput, "tour-name"));
 
     const descriptionInput = document.createElement("input");
     descriptionInput.dataset["testid"] = "tour-description";
@@ -500,9 +766,10 @@ export function mountAuthoringView(
         }),
       );
     });
-    section.append(
+    body.append(
       buildLabeledField("Description", descriptionInput, "tour-description"),
     );
+    section.append(body);
 
     return section;
   }
@@ -558,8 +825,10 @@ export function mountAuthoringView(
   // Immer/RTK keep untouched slices referentially stable), so editing the
   // tour name never disturbs the Waypoints section's DOM (or vice versa),
   // regardless of timing.
+  let tourDetailsOpen = false;
   let renderedName: string | undefined;
   let renderedDescription: string | undefined;
+  let renderedTourDetailsOpen: boolean | undefined;
   let tourDetailsEl: HTMLElement | null = null;
 
   let renderedWaypoints: AuthoringSliceState["waypoints"] | undefined;
@@ -584,7 +853,8 @@ export function mountAuthoringView(
     return (
       tourDetailsEl === null ||
       authoring.name !== renderedName ||
-      authoring.description !== renderedDescription
+      authoring.description !== renderedDescription ||
+      tourDetailsOpen !== renderedTourDetailsOpen
     );
   }
 
@@ -607,6 +877,7 @@ export function mountAuthoringView(
       );
       renderedName = authoring.name;
       renderedDescription = authoring.description;
+      renderedTourDetailsOpen = tourDetailsOpen;
     }
 
     if (waypointsSectionIsStale(authoring)) {

@@ -10,6 +10,7 @@ describe("ICONS", () => {
         "check",
         "chevron",
         "cube",
+        "grip",
         "link",
         "photo",
         "pin",

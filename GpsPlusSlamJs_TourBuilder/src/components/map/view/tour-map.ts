@@ -37,12 +37,25 @@ const MAX_ZOOM = 19;
 const MARKER_SIZE_PX = 20;
 /** Size (px) of the "next" highlight — slightly larger to stand out. */
 const NEXT_MARKER_SIZE_PX = 24;
+/** Size (px) of the actual tap/drag target around a waypoint marker — a
+ *  bare 20-24px dot is precise to the point of unusable on a phone
+ *  (exactly the problem fixed for the waypoint list's own drag handle;
+ *  same fix here, since this is the OTHER way to reposition a waypoint).
+ *  The visible dot stays its normal size, centered inside this. */
+const MARKER_TOUCH_TARGET_PX = 44;
 
 const STATUS_COLOR: Record<WaypointMarkerStatus, string> = {
   unvisited: "#9ca3af", // neutral grey
   next: "#f5b400", // gold/amber highlight (visual hint only, not a gate)
   visited: "#22c55e", // green
 };
+
+/** Size (px) of the click-to-place preview pin. */
+const PENDING_PIN_SIZE_PX = 30;
+/** Committed waypoints are flat circles; the pending pin is a teardrop that
+ *  points at its exact spot (map-pin convention) — reads as "about to be
+ *  placed", not yet a real waypoint. */
+const PENDING_PIN_HTML = `<svg width="${PENDING_PIN_SIZE_PX}" height="${PENDING_PIN_SIZE_PX}" viewBox="0 0 24 32" style="filter:drop-shadow(0 2px 4px rgba(0,0,0,0.6))"><path d="M12 30.5S2.5 19.8 2.5 12a9.5 9.5 0 1 1 19 0c0 7.8-9.5 18.5-9.5 18.5Z" fill="#9ec1ff" stroke="#10131a" stroke-width="1.5"/><circle cx="12" cy="12" r="4" fill="#10131a"/></svg>`;
 
 export interface TourMapOptions {
   readonly tileServerUrl?: string;
@@ -57,6 +70,23 @@ export interface TourMapOptions {
    * (unchanged behaviour for maps the visitor is meant to pan/zoom).
    */
   readonly interactive?: boolean;
+  /**
+   * When set, every waypoint marker becomes drag-to-reposition and this
+   * fires once per drag gesture, with the marker's own id and its dropped
+   * lat/lon — the second way to place a waypoint (the first: walk to the
+   * spot and drop it there). Omit to keep markers fixed (e.g. Viewing
+   * mode, where a visitor never moves a waypoint).
+   */
+  readonly onWaypointDragEnd?: (id: string, lat: number, lon: number) => void;
+  /**
+   * When set, clicking anywhere on the map (not on an existing marker —
+   * Leaflet markers stop their own click from bubbling to the map) drops a
+   * preview pin there with a "Drop Waypoint" popup button; confirming it
+   * calls this with the clicked lat/lon. The third way to place a
+   * waypoint, alongside walking there and dragging an existing marker.
+   * Clicking elsewhere (or confirming) clears the pin.
+   */
+  readonly onDropWaypointHere?: (lat: number, lon: number) => void;
 }
 
 export interface TourMapInstance {
@@ -77,14 +107,33 @@ export interface TourMapInstance {
   destroy(): void;
 }
 
-function buildWaypointIconHtml(status: WaypointMarkerStatus): string {
+function buildWaypointIconHtml(
+  status: WaypointMarkerStatus,
+  order: number,
+): string {
   const color = STATUS_COLOR[status];
   const size = status === "next" ? NEXT_MARKER_SIZE_PX : MARKER_SIZE_PX;
-  const checkmark =
+  // A visited waypoint reads as "done" (checkmark); an upcoming one carries
+  // its position in the author's own list — this is the numbering the
+  // waypoint panel already shows ("Waypoint 1", "Waypoint 2", …), not a
+  // proximity/activation order (plan D3: that's distance-based, never
+  // list-order-based).
+  const label =
     status === "visited"
-      ? '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:white;font-size:11px;line-height:1;">✓</div>'
-      : "";
-  return `<div style="position:relative;background:${color};width:${size}px;height:${size}px;border-radius:50%;border:3px solid white;box-shadow:0 0 4px rgba(0,0,0,0.7);">${checkmark}</div>`;
+      ? "✓"
+      : order <= 99
+        ? String(order)
+        : "";
+  const fontSize = order >= 10 ? 9 : 11;
+  const glyph = label
+    ? `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:white;font-size:${fontSize}px;font-weight:600;line-height:1;">${label}</div>`
+    : "";
+  const dot = `<div style="position:relative;background:${color};width:${size}px;height:${size}px;border-radius:50%;border:3px solid white;box-shadow:0 0 4px rgba(0,0,0,0.7);">${glyph}</div>`;
+  // The dot is the whole visible marker, but `iconSize` below is what
+  // Leaflet actually binds tap/drag listeners to — centering the dot in a
+  // larger invisible box is what makes the REAL interactive target bigger
+  // without also drawing a bigger, more cluttered dot on the map.
+  return `<div style="width:${MARKER_TOUCH_TARGET_PX}px;height:${MARKER_TOUCH_TARGET_PX}px;display:flex;align-items:center;justify-content:center;">${dot}</div>`;
 }
 
 export function createTourMap(
@@ -120,6 +169,51 @@ export function createTourMap(
     options.onTileError?.(e.error);
   });
   tileLayer.addTo(leafletMap);
+
+  // Leaflet's default zoom control sits top-left, the same corner the GPS
+  // badge already occupies (authoring's full-bleed map) — move it out of
+  // the way rather than stacking on top of it.
+  if (interactive) {
+    leafletMap.zoomControl?.setPosition("bottomright");
+  }
+
+  let pendingPinMarker: L.Marker | null = null;
+
+  function clearPendingPin(): void {
+    pendingPinMarker?.remove();
+    pendingPinMarker = null;
+  }
+
+  const onDropWaypointHere = options.onDropWaypointHere;
+  if (onDropWaypointHere) {
+    leafletMap.on("click", (e: L.LeafletMouseEvent) => {
+      clearPendingPin();
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "primary map-pending-pin-button";
+      button.textContent = "Drop Waypoint";
+      button.addEventListener("click", () => {
+        onDropWaypointHere(e.latlng.lat, e.latlng.lng);
+        clearPendingPin();
+      });
+      pendingPinMarker = L.marker(e.latlng, {
+        icon: L.divIcon({
+          className: "",
+          html: PENDING_PIN_HTML,
+          iconSize: [PENDING_PIN_SIZE_PX, PENDING_PIN_SIZE_PX],
+          iconAnchor: [PENDING_PIN_SIZE_PX / 2, PENDING_PIN_SIZE_PX],
+        }),
+      })
+        .addTo(leafletMap!)
+        .bindPopup(button, { closeButton: true, offset: [0, -PENDING_PIN_SIZE_PX] })
+        .openPopup();
+      // Closing the popup (the ✕, Escape, or clicking elsewhere on the map
+      // — clicking elsewhere also re-fires this same "click" handler, which
+      // already calls clearPendingPin() itself, so this is only redundant
+      // there, not wrong) always means "never mind".
+      pendingPinMarker.on("popupclose", clearPendingPin);
+    });
+  }
 
   let trajectoryLayers: L.Layer[] = [];
   let waypointMarkers: L.Marker[] = [];
@@ -177,19 +271,27 @@ export function createTourMap(
         hasCenteredOnce = true;
       }
       for (const marker of waypointMarkers) marker.remove();
+      const onDragEnd = options.onWaypointDragEnd;
       waypointMarkers = markers.map((m) => {
-        const size = m.status === "next" ? NEXT_MARKER_SIZE_PX : MARKER_SIZE_PX;
-        const anchor = size / 2;
-        return L.marker([m.position.lat, m.position.lon], {
+        const marker = L.marker([m.position.lat, m.position.lon], {
           icon: L.divIcon({
             className: "",
-            html: buildWaypointIconHtml(m.status),
-            iconSize: [size, size],
-            iconAnchor: [anchor, anchor],
+            html: buildWaypointIconHtml(m.status, m.order),
+            iconSize: [MARKER_TOUCH_TARGET_PX, MARKER_TOUCH_TARGET_PX],
+            iconAnchor: [
+              MARKER_TOUCH_TARGET_PX / 2,
+              MARKER_TOUCH_TARGET_PX / 2,
+            ],
           }),
-        })
-          .bindPopup(m.id)
-          .addTo(leafletMap!);
+          draggable: onDragEnd !== undefined,
+        }).bindPopup(m.id);
+        if (onDragEnd) {
+          marker.on("dragend", () => {
+            const { lat, lng } = marker.getLatLng();
+            onDragEnd(m.id, lat, lng);
+          });
+        }
+        return marker.addTo(leafletMap!);
       });
     },
 
@@ -236,6 +338,7 @@ export function createTourMap(
 
     destroy(): void {
       if (!leafletMap) return;
+      clearPendingPin();
       for (const layer of trajectoryLayers) layer.remove();
       for (const marker of waypointMarkers) marker.remove();
       trajectoryLayers = [];

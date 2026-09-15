@@ -404,6 +404,22 @@ describe("mountAuthoringView", () => {
     expect(textarea.value).toBe("Already written.");
   });
 
+  it("Tour Details starts collapsed and opens/closes on its header click, without losing the name field's value", () => {
+    const { root } = harness(draft({ name: "Castle Walk" }));
+    const detailsSection = () =>
+      byTestId(root, "tour-details-toggle").closest(".authoring-section")!;
+    expect(detailsSection().classList.contains("open")).toBe(false);
+
+    byTestId(root, "tour-details-toggle").click();
+    expect(detailsSection().classList.contains("open")).toBe(true);
+    expect((byTestId(root, "tour-name") as HTMLInputElement).value).toBe(
+      "Castle Walk",
+    );
+
+    byTestId(root, "tour-details-toggle").click();
+    expect(detailsSection().classList.contains("open")).toBe(false);
+  });
+
   it("name/description inputs dispatch setTourMeta", () => {
     const { root, store } = harness();
     const nameInput = byTestId(root, "tour-name") as HTMLInputElement;
@@ -490,6 +506,184 @@ describe("mountAuthoringView", () => {
     expect(byTestId(root, "waypoint-wp-2").classList.contains("open")).toBe(
       true,
     );
+  });
+
+  it("dragging a card past its siblings' midpoints reorders the DOM live, then dispatches one moveWaypoint matching the drop position", () => {
+    const { root, store } = harness(
+      draft({
+        waypoints: [
+          {
+            id: "wp-1",
+            position: { lat: 1, lon: 1 },
+            prefetchRadius: 25,
+            activeRadius: 10,
+            content: {},
+          },
+          {
+            id: "wp-2",
+            position: { lat: 2, lon: 2 },
+            prefetchRadius: 25,
+            activeRadius: 10,
+            content: {},
+          },
+          {
+            id: "wp-3",
+            position: { lat: 3, lon: 3 },
+            prefetchRadius: 25,
+            activeRadius: 10,
+            content: {},
+          },
+        ],
+      }),
+    );
+
+    const list = root.querySelector(".waypoint-list")!;
+    // Every card (including the placeholder, once it exists) reports its
+    // top as 50px times its LIVE index in `list.children` — a stand-in for
+    // real flow layout that stays correct as the drag reorders the DOM,
+    // unlike a fixed-at-setup closure value.
+    function wireStackedRect(el: HTMLElement): void {
+      el.getBoundingClientRect = () =>
+        ({
+          top: Array.from(list.children).indexOf(el) * 50,
+          height: 50,
+          left: 0,
+          width: 300,
+        }) as DOMRect;
+    }
+    for (const card of Array.from(list.children) as HTMLElement[]) {
+      wireStackedRect(card);
+    }
+
+    const handle = byTestId(root, "wp-drag-handle-wp-1");
+    handle.dispatchEvent(
+      new PointerEvent("pointerdown", { bubbles: true, clientY: 25 }),
+    );
+    const draggedCard = byTestId(root, "waypoint-wp-1");
+    expect(draggedCard.classList.contains("dragging")).toBe(true);
+    expect(draggedCard.style.position).toBe("fixed");
+    const placeholder = list.querySelector(".wp-drag-placeholder");
+    expect(placeholder).not.toBeNull();
+    wireStackedRect(placeholder as HTMLElement); // it now holds wp-1's old slot
+
+    const wp2Card = byTestId(root, "waypoint-wp-2");
+
+    // Past wp-2's midpoint (75) and wp-3's (125): the placeholder lands
+    // last, and wp-2 — displaced up one slot — picks up a FLIP transform
+    // for the browser to animate away next frame.
+    document.dispatchEvent(new PointerEvent("pointermove", { clientY: 130 }));
+    expect(
+      Array.from(list.children).map((c) =>
+        c === placeholder ? "placeholder" : (c as HTMLElement).dataset["testid"],
+      ),
+    ).toEqual(["waypoint-wp-2", "waypoint-wp-3", "waypoint-wp-1", "placeholder"]);
+    expect(wp2Card.style.transform).not.toBe("");
+
+    document.dispatchEvent(new PointerEvent("pointerup"));
+
+    expect(store.actions).toContainEqual({
+      type: "authoring/moveWaypoint",
+      payload: { id: "wp-1", toIndex: 2 },
+    });
+    expect(Array.from(list.children).map((c) => (c as HTMLElement).dataset["testid"])).toEqual(
+      ["waypoint-wp-2", "waypoint-wp-3", "waypoint-wp-1"],
+    );
+    expect(draggedCard.classList.contains("dragging")).toBe(false);
+    expect(draggedCard.style.position).toBe("");
+    expect(list.querySelector(".wp-drag-placeholder")).toBeNull();
+  });
+
+  it("a quick tap anywhere on a card's header still just toggles it open (no aiming at the grip required, but a tap isn't a drag)", () => {
+    const { root } = harness(
+      draft({
+        waypoints: [
+          {
+            id: "wp-1",
+            position: { lat: 1, lon: 1 },
+            prefetchRadius: 25,
+            activeRadius: 10,
+            content: {},
+          },
+        ],
+      }),
+    );
+    const header = byTestId(root, "wp-toggle-wp-1");
+
+    header.dispatchEvent(
+      new PointerEvent("pointerdown", {
+        bubbles: true,
+        pointerId: 1,
+        clientX: 100,
+        clientY: 100,
+      }),
+    );
+    // Real event order for a tap: pointerdown, pointerup, then the
+    // browser's own synthesized click. Firing pointerup also clears the
+    // pending hold-to-drag timer — a real tap must not leave it armed to
+    // fire later against whatever the next test happens to render.
+    document.dispatchEvent(new PointerEvent("pointerup", { pointerId: 1 }));
+    header.dispatchEvent(new Event("click", { bubbles: true }));
+
+    expect(byTestId(root, "waypoint-wp-1").classList.contains("open")).toBe(
+      true,
+    );
+    expect(byTestId(root, "waypoint-wp-1").classList.contains("dragging")).toBe(
+      false,
+    );
+  });
+
+  it("pressing and holding anywhere on a card's header (not just the grip) also starts a drag", () => {
+    vi.useFakeTimers();
+    try {
+      const { root } = harness(
+        draft({
+          waypoints: [
+            {
+              id: "wp-1",
+              position: { lat: 1, lon: 1 },
+              prefetchRadius: 25,
+              activeRadius: 10,
+              content: {},
+            },
+            {
+              id: "wp-2",
+              position: { lat: 2, lon: 2 },
+              prefetchRadius: 25,
+              activeRadius: 10,
+              content: {},
+            },
+          ],
+        }),
+      );
+      const header = byTestId(root, "wp-toggle-wp-1");
+
+      header.dispatchEvent(
+        new PointerEvent("pointerdown", {
+          bubbles: true,
+          pointerId: 1,
+          clientX: 100,
+          clientY: 100,
+        }),
+      );
+      // Held past HOLD_TO_DRAG_MS without moving: commits to a drag.
+      vi.advanceTimersByTime(250);
+
+      const card = byTestId(root, "waypoint-wp-1");
+      expect(card.classList.contains("dragging")).toBe(true);
+
+      // The hold-to-drag's own pointerup (not the manufactured `click`
+      // used in the tap test above) must NOT also toggle the card open —
+      // that's exactly what `dragJustHappened` exists to prevent.
+      document.dispatchEvent(
+        new PointerEvent("pointerup", { pointerId: 1 }),
+      );
+      header.dispatchEvent(new Event("click", { bubbles: true }));
+      expect(byTestId(root, "waypoint-wp-1").classList.contains("open")).toBe(
+        false,
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("dropping a new waypoint expands it and collapses whatever was open", () => {

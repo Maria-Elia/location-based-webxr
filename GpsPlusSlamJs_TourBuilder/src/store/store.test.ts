@@ -14,6 +14,7 @@ import {
   addWaypoint,
   updateWaypoint,
   removeWaypoint,
+  moveWaypoint,
   attachAsset,
   removeAsset,
   addBreadcrumbPoint,
@@ -255,6 +256,34 @@ describe("authoring slice", () => {
     expect(s.waypoints[0]!.content.transcript).toBe("hi");
     s = authoringReducer(s, removeWaypoint("wp-1"));
     expect(s.waypoints).toEqual([]);
+  });
+
+  it("moveWaypoint reorders the list by id, clamping out-of-range targets and no-op'ing an unknown id", () => {
+    let s = authoringReducer(
+      undefined,
+      addWaypoint({ id: "wp-1", position: { lat: 1, lon: 1 } }),
+    );
+    s = authoringReducer(
+      s,
+      addWaypoint({ id: "wp-2", position: { lat: 2, lon: 2 } }),
+    );
+    s = authoringReducer(
+      s,
+      addWaypoint({ id: "wp-3", position: { lat: 3, lon: 3 } }),
+    );
+    expect(s.waypoints.map((w) => w.id)).toEqual(["wp-1", "wp-2", "wp-3"]);
+
+    s = authoringReducer(s, moveWaypoint({ id: "wp-3", toIndex: 0 }));
+    expect(s.waypoints.map((w) => w.id)).toEqual(["wp-3", "wp-1", "wp-2"]);
+
+    s = authoringReducer(s, moveWaypoint({ id: "wp-1", toIndex: 99 }));
+    expect(s.waypoints.map((w) => w.id)).toEqual(["wp-3", "wp-2", "wp-1"]);
+
+    const unchanged = authoringReducer(
+      s,
+      moveWaypoint({ id: "does-not-exist", toIndex: 0 }),
+    );
+    expect(unchanged.waypoints).toBe(s.waypoints);
   });
 
   it("addBreadcrumbPoint appends; clearAuthoring resets", () => {

@@ -83,6 +83,31 @@ describe("createAuthoringSession", () => {
     });
   });
 
+  it("dropWaypoint(position) drops at the given position instead of the latest GPS fix — the map-click flow", () => {
+    const { session, deliver, actions } = harness();
+    deliver(POS_A);
+    const clicked: TourCoord = { lat: 1, lon: 2 };
+
+    const id = session.dropWaypoint(clicked);
+
+    expect(id).toBe("wp-1");
+    expect(actions).toContainEqual({
+      type: "authoring/addWaypoint",
+      payload: { id: "wp-1", position: clicked },
+    });
+  });
+
+  it("dropWaypoint(position) works even before any GPS fix has arrived", () => {
+    const { session, actions } = harness();
+    const clicked: TourCoord = { lat: 1, lon: 2 };
+
+    expect(session.dropWaypoint(clicked)).toBe("wp-1");
+    expect(actions).toContainEqual({
+      type: "authoring/addWaypoint",
+      payload: { id: "wp-1", position: clicked },
+    });
+  });
+
   it("seeds the next waypoint id from existing waypoints in state", () => {
     const draft = {
       ...emptyDraft(),
