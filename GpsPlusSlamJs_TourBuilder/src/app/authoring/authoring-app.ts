@@ -267,9 +267,15 @@ async function mountAuthoringTools(
       document.removeEventListener("visibilitychange", onVisibilityChange);
       wakeLockHandle?.release();
       void durable.discard(); // packed successfully — nothing left to resume
-      swapScreen(authoringRoot, () => {
+      // Swap out the WHOLE tools screen, not just the floating panel: the
+      // full-bleed map (`toolsHost`, `position:fixed`) is still live
+      // underneath otherwise, and the share panel — a normal card meant
+      // for the padded `#app-root` column every other screen uses — ends
+      // up rendered on top of it instead of replacing it.
+      swapScreen(toolsHost, () => {
         view.destroy();
-        const shareHost = mountPackAndSharePanel(toolsHost);
+        tourMap?.destroy();
+        const shareHost = mountPackAndSharePanel(root);
         shareHost.root.classList.add("screen-enter");
       });
     },
