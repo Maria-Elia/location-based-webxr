@@ -81,11 +81,7 @@ export function mountLandingScreen(
   linkInput.type = "text";
   linkInput.dataset["testid"] = "landing-tour-link";
   linkInput.placeholder = "Paste the tour link";
-  const linkField = buildLabeledField(
-    "Tour link",
-    linkInput,
-    "landing-tour-link",
-  );
+  const linkField = buildLabeledField("OneDrive / Dropbox link", linkInput, "landing-tour-link");
 
   const goButton = document.createElement("button");
   goButton.type = "button";
@@ -130,9 +126,7 @@ export function mountLandingScreen(
     // the author's own share panel.
     const prepared = prepareHostedZipUrl(raw, import.meta.env.DEV);
     try {
-      navigate(
-        buildTourUrl(`${location.origin}${location.pathname}`, prepared.url),
-      );
+      navigate(buildTourUrl(`${location.origin}${location.pathname}`, prepared.url));
     } catch {
       linkStatus.textContent = "That doesn't look like a link.";
       linkStatus.dataset["state"] = "error";
