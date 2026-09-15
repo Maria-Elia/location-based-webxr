@@ -42,6 +42,29 @@
         min-width: 92px;
       }
 
+      #intro {
+        position: absolute;
+        top: 12px;
+        left: 12px;
+        margin: 0;
+        padding: 12px 14px;
+        max-width: 340px;
+        background: rgb(0 0 0 / 55%);
+        border: 1px solid #2a3550;
+        border-radius: 10px;
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      #intro h1 {
+        margin: 0 0 6px;
+        font-size: 15px;
+      }
+
+      #intro p {
+        margin: 0;
+      }
+
       #hud {
         position: absolute;
         top: 12px;
@@ -63,6 +86,15 @@
   </head>
   <body>
     <div id="canvas-root"></div>
+
+    <section id="intro">
+      <h1>AR viewing scene</h1>
+      <p>
+        Loaded tour turns into anchored world-space content: knights load
+        invisibly at a distance and appear on approach, tap-to-play stories
+        show a transcript, breadcrumb orbs trail the last approach.
+      </p>
+    </section>
 
     <div id="hud"></div>
 
