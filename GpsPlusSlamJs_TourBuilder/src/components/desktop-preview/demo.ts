@@ -83,7 +83,6 @@ const tour: Tour = {
 };
 
 const container = document.querySelector<HTMLDivElement>("#canvas-root")!;
-const hud = document.querySelector<HTMLElement>("#hud")!;
 const status = document.querySelector<HTMLElement>("#status")!;
 const startButton = document.querySelector<HTMLButtonElement>("#start")!;
 const autopilotButton =
@@ -147,7 +146,6 @@ const tourScene = createTourScene({
 store.dispatch(loadTour(tour));
 session.runtime.registerFrameUpdate((dt) => {
   tourScene.tick(dt);
-  renderHud();
 });
 
 startButton.addEventListener("click", () => {
@@ -163,24 +161,5 @@ autopilotButton.addEventListener("click", () => {
   session.setAutopilot(next);
   autopilotButton.textContent = next ? "Stop auto-walk" : "Auto-walk";
 });
-
-function renderHud(): void {
-  const zones = store.getState().zones.byWaypointId;
-  const debug = tourScene.debug();
-  const pose = session.getPose();
-  hud.textContent = [
-    ...tour.waypoints.map((waypoint) => {
-      const state = debug.presenters
-        .find((presenter) => presenter.id === waypoint.id)
-        ?.debugState();
-      return `${waypoint.id.padEnd(11)} ${(zones[waypoint.id] ?? "IDLE").padEnd(
-        12,
-      )} visible=${String(state?.visible ?? false)}`;
-    }),
-    "",
-    `walker        ${pose.x.toFixed(1)} N, ${pose.z.toFixed(1)} E`,
-    `story         ${debug.story.playingId ?? "—"}${debug.story.paused ? " (paused)" : ""}`,
-  ].join("\n");
-}
 
 status.textContent = "Press Start, then walk with W A S D.";
