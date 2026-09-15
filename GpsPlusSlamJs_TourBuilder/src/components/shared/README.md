@@ -40,8 +40,9 @@ framework-free.
 
 ### `resize.ts` — demo window-resize helper (view)
 
-`attachResize(camera, renderer)` keeps a perspective camera + renderer in sync
-with the window size. Shared by the component demos so the boilerplate lives once.
+`attachResize(camera, renderer, container)` keeps a perspective camera +
+renderer in sync with `container`'s (the `#canvas-root` element) size on
+window resize. Shared by the component demos so the boilerplate lives once.
 
 ### `tap-gate.ts` — tap-vs-drag predicate (pure)
 
@@ -64,8 +65,13 @@ taps on touch. The tap decision itself is `tap-gate.ts`. Each component's own
 ### `demo.css` — shared canvas-demo styles
 
 Base styles for the canvas-overlay demo pages (`:root`, `html/body`,
-`#canvas-root`, `#hud`, `#status`) — billboard, in-world-text. Each demo's
-`index.html` links it and keeps only component-specific tweaks inline.
+`.page-header`, `#canvas-root`, `#hud`, `#status`) — billboard, in-world-text,
+ar-scene, plus (with the `html/body` scroll override each already carries)
+authoring and onboarding. `.page-header` (`h1` + `p.lead`) gives every demo the
+same on-page title as the control-panel demos' `main h1`/`p.lead`
+(`panel-demo.css`); `#canvas-root` fills the space below it rather than the
+whole viewport. Each demo's `index.html` links it and keeps only
+component-specific tweaks inline.
 
 ### `panel-demo.css` — shared control-panel demo styles
 

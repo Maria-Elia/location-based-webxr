@@ -17,14 +17,39 @@ body {
   overflow: hidden;
 }
 
+body {
+  display: flex;
+  flex-direction: column;
+}
+
+/* On-page heading — same look as panel-demo.css's `main h1`/`p.lead`, kept
+   here too so the canvas-overlay demos (billboard, in-world-text, ar-scene)
+   match the control-panel demos (store, packaging) instead of floating their
+   own title inside #hud. */
+.page-header {
+  flex: none;
+  padding: 20px 20px 16px;
+}
+
+.page-header h1 {
+  font-size: 20px;
+  margin: 0 0 4px;
+}
+
+.page-header p.lead {
+  margin: 0;
+  color: #9aa7bd;
+}
+
 #canvas-root {
-  position: fixed;
-  inset: 0;
+  position: relative;
+  flex: 1;
+  min-height: 0;
   z-index: 0;
 }
 
 #hud {
-  position: fixed;
+  position: absolute;
   top: 12px;
   left: 12px;
   z-index: 1;
@@ -36,11 +61,6 @@ body {
   font-size: 13px;
   line-height: 1.5;
   pointer-events: none;
-}
-
-#hud h1 {
-  margin: 0 0 6px;
-  font-size: 15px;
 }
 
 #hud p {

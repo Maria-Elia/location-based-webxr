@@ -8,8 +8,8 @@
     <link rel="stylesheet" href="./view/onboarding-view.css" />
     <style>
       /* Override shared demo.css: that stylesheet assumes a full-bleed
-         #canvas-root Three.js scene behind a floating #hud overlay. This
-         demo has no canvas — it's a plain scrolling DOM page.
+         #canvas-root Three.js scene below .page-header. This demo has no
+         canvas — it's a plain scrolling DOM page.
          `html` too — on mobile browsers it's `html`'s overflow that
          actually gates touch scrolling, not just `body`'s.
          `!important`: Vite's production build injects demo.css's bundled
@@ -20,11 +20,9 @@
       body {
         overflow: auto !important;
       }
-      #hud {
-        position: static;
+      .page-header {
         max-width: 640px;
-        margin: 24px auto 0;
-        pointer-events: auto;
+        margin: 0 auto;
       }
       /* .gate-card (onboarding-view.css) supplies the checklist skin; this
          demo only adds the centered-column layout the real app doesn't
@@ -56,9 +54,9 @@
     </style>
   </head>
   <body>
-    <section id="hud">
+    <header class="page-header">
       <h1>Onboarding gate demo</h1>
-      <p>
+      <p class="lead">
         Click <strong>Grant Access</strong> to request camera and GPS permission
         — this uses the real browser prompts, one after another. Start stays
         disabled until the browser itself reports both as granted. Clicking
@@ -66,7 +64,7 @@
         confirmation beep.
       </p>
       <p id="status"></p>
-    </section>
+    </header>
     <div id="gate-root" class="gate-card"></div>
     <details id="debug-panel">
       <summary>Internal gate state (debug, not part of the real app)</summary>

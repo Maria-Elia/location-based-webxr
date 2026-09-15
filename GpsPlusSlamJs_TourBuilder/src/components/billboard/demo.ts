@@ -47,7 +47,7 @@ if (canvasRoot === null) {
 
 const renderer = new WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(window.devicePixelRatio);
-renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setSize(canvasRoot.clientWidth, canvasRoot.clientHeight);
 canvasRoot.appendChild(renderer.domElement);
 
 const scene = new Scene();
@@ -55,7 +55,7 @@ scene.background = new Color(0x10131a);
 
 const camera = new PerspectiveCamera(
   60,
-  window.innerWidth / window.innerHeight,
+  canvasRoot.clientWidth / canvasRoot.clientHeight,
   0.1,
   100,
 );
@@ -163,7 +163,7 @@ createBillboardInteraction({
   },
 });
 
-attachResize(camera, renderer);
+attachResize(camera, renderer, canvasRoot);
 
 const cameraWorld = new Vector3();
 function animate(): void {

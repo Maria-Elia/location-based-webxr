@@ -41,70 +41,27 @@
         color: #9ec1ff;
         min-width: 92px;
       }
-
-      #intro {
-        position: absolute;
-        top: 12px;
-        left: 12px;
-        margin: 0;
-        padding: 12px 14px;
-        max-width: 340px;
-        background: rgb(0 0 0 / 55%);
-        border: 1px solid #2a3550;
-        border-radius: 10px;
-        font-size: 13px;
-        line-height: 1.5;
-      }
-
-      #intro h1 {
-        margin: 0 0 6px;
-        font-size: 15px;
-      }
-
-      #intro p {
-        margin: 0;
-      }
-
-      #hud {
-        position: absolute;
-        top: 12px;
-        right: 12px;
-        margin: 0;
-        padding: 12px 14px;
-        max-width: 46ch;
-        background: rgb(0 0 0 / 62%);
-        border: 1px solid #2a3550;
-        border-radius: 10px;
-        font-family: ui-monospace, monospace;
-        font-size: 12px;
-        line-height: 1.55;
-        color: #cfe0ff;
-        white-space: pre;
-        overflow-x: auto;
-      }
     </style>
   </head>
   <body>
-    <div id="canvas-root"></div>
-
-    <section id="intro">
+    <header class="page-header">
       <h1>AR viewing scene</h1>
-      <p>
+      <p class="lead">
         Loaded tour turns into anchored world-space content: knights load
         invisibly at a distance and appear on approach, tap-to-play stories show
         a transcript, breadcrumb orbs trail the last approach.
       </p>
-    </section>
+    </header>
 
-    <div id="hud"></div>
+    <div id="canvas-root">
+      <div id="controls">
+        <button id="play" type="button">▶ Play</button>
+        <input id="scrub" type="range" min="0" max="0" value="0" step="1" />
+        <span id="readout">0 / 0</span>
+      </div>
 
-    <div id="controls">
-      <button id="play" type="button">▶ Play</button>
-      <input id="scrub" type="range" min="0" max="0" value="0" step="1" />
-      <span id="readout">0 / 0</span>
+      <p id="status"></p>
     </div>
-
-    <p id="status"></p>
 
     <script type="module" src="./demo.ts"></script>
   </body>

@@ -61,7 +61,7 @@ if (canvasRoot === null) {
 
 const renderer = new WebGLRenderer({ antialias: true, alpha: true });
 renderer.setPixelRatio(window.devicePixelRatio);
-renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setSize(canvasRoot.clientWidth, canvasRoot.clientHeight);
 renderer.xr.enabled = true;
 canvasRoot.appendChild(renderer.domElement);
 
@@ -73,7 +73,7 @@ scene.add(grid);
 
 const camera = new PerspectiveCamera(
   60,
-  window.innerWidth / window.innerHeight,
+  canvasRoot.clientWidth / canvasRoot.clientHeight,
   0.1,
   100,
 );
@@ -158,7 +158,7 @@ document.body.appendChild(
   ARButton.createButton(renderer, { optionalFeatures: ["local-floor"] }),
 );
 
-attachResize(camera, renderer);
+attachResize(camera, renderer, canvasRoot);
 
 function updateHud(): void {
   if (statusEl === null) {

@@ -129,16 +129,16 @@ const container = document.querySelector<HTMLDivElement>("#canvas-root")!;
 const scene = new Scene();
 const camera = new PerspectiveCamera(
   60,
-  window.innerWidth / window.innerHeight,
+  container.clientWidth / container.clientHeight,
   0.1,
   2000,
 );
 camera.position.set(0, 14, 18);
 const renderer = new WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setSize(container.clientWidth, container.clientHeight);
 container.appendChild(renderer.domElement);
-attachResize(camera, renderer);
+attachResize(camera, renderer, container);
 
 scene.add(new AmbientLight(0xffffff, 1.6));
 const sun = new DirectionalLight(0xffffff, 1.2);
@@ -237,7 +237,6 @@ store.dispatch(loadTour(tour));
 const scrub = document.querySelector<HTMLInputElement>("#scrub")!;
 const playButton = document.querySelector<HTMLButtonElement>("#play")!;
 const readout = document.querySelector<HTMLElement>("#readout")!;
-const hud = document.querySelector<HTMLElement>("#hud")!;
 scrub.max = String(path.length - 1);
 
 const playback = createPlaybackLoop({
@@ -263,27 +262,6 @@ scrub.addEventListener("input", () => {
   playback.seekTo(Number(scrub.value));
 });
 
-function renderHud(): void {
-  const zones = store.getState().zones.byWaypointId;
-  const debug = tourScene.debug();
-  const outstanding = [...counts.entries()]
-    .filter(([, n]) => n !== 0)
-    .map(([id, n]) => `${id}×${String(n)}`);
-  hud.textContent = [
-    ...tour.waypoints.map((w) => {
-      const state = debug.presenters.find((p) => p.id === w.id)?.debugState();
-      return `${w.id.padEnd(14)} ${(zones[w.id] ?? "IDLE").padEnd(12)} load=${
-        state?.load ?? "-"
-      } visible=${String(state?.visible ?? false)}`;
-    }),
-    "",
-    `LRU templates : ${debug.cachedTemplates.length ? debug.cachedTemplates.join(", ") : "—"}`,
-    `parses        : ${String(debug.activeParses)} active, ${String(debug.pendingParses)} queued`,
-    `story         : ${debug.story.playingId ?? "—"}${debug.story.paused ? " (paused)" : ""}`,
-    `asset refs    : ${outstanding.length ? outstanding.join(", ") : "0 (balanced)"}`,
-  ].join("\n");
-}
-
 let lastTime = performance.now();
 function frame(now: number): void {
   const dt = Math.min((now - lastTime) / 1000, 0.1);
@@ -291,7 +269,6 @@ function frame(now: number): void {
   controls.update();
   tourScene.tick(dt);
   renderer.render(scene, camera);
-  renderHud();
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

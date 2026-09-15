@@ -18,10 +18,6 @@
       body {
         overflow: auto !important;
       }
-      #hud {
-        position: static;
-        pointer-events: auto;
-      }
       main {
         max-width: 640px;
         margin: 24px auto 48px;
@@ -180,22 +176,21 @@
     </style>
   </head>
   <body>
+    <header class="page-header">
+      <h1>Authoring tools demo</h1>
+      <p class="lead">
+        Pick <strong>Live GPS</strong> (real device) or
+        <strong>Replay a recording</strong> — every recording zip in
+        <code>recordings/</code> is listed in the dropdown. Click
+        <strong>Drop Waypoint</strong> as the position moves, attach files to a
+        waypoint's model/sprite/audio slots, then
+        <strong>Export &amp; Pack</strong> to produce a downloadable
+        <code>tour.zip</code> via component 5's <code>packTour</code> — load it
+        in the cloud-loader or ar-scene demo to see it play back. QR generation
+        is component 5's own demo.
+      </p>
+    </header>
     <main>
-      <section id="hud">
-        <h1>Authoring tools demo</h1>
-        <p>
-          Pick <strong>Live GPS</strong> (real device) or
-          <strong>Replay a recording</strong> — every recording zip in
-          <code>recordings/</code> is listed in the dropdown. Click
-          <strong>Drop Waypoint</strong> as the position moves, attach files to
-          a waypoint's model/sprite/audio slots, then
-          <strong>Export &amp; Pack</strong> to produce a downloadable
-          <code>tour.zip</code> via component 5's <code>packTour</code> — load
-          it in the cloud-loader or ar-scene demo to see it play back. QR
-          generation is component 5's own demo.
-        </p>
-      </section>
-
       <section class="demo-section">
         <h2>Position</h2>
         <div id="mode-controls">
