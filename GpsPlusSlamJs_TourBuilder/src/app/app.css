@@ -1216,6 +1216,93 @@ p[data-testid="qr-status"] {
   justify-content: flex-end;
 }
 
+/* Auto-walk's one-time callout (hud.ts) — points down at the button it
+   introduces rather than turning the feature on unasked. */
+.autopilot-wrap {
+  position: relative;
+}
+
+.autopilot-hint {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px 6px 10px;
+  background: var(--primary);
+  border: 1px solid var(--primary-hover);
+  border-radius: var(--radius-sm);
+  color: white;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 40%);
+  animation: autopilot-hint-in var(--duration-base) var(--ease-out) both;
+}
+
+/* `display: flex` above otherwise beats the UA stylesheet's `[hidden] {
+   display: none }` (same specificity, author rule loads later) — the
+   exact bug already hit once this session on `.landing-link-form` and
+   `.authoring-sections`. Without this, `hint.hidden = true` (the close
+   button, dismissAutopilotHint(), and the auto-timeout all just set this)
+   updates the DOM attribute but the bubble stays visually on screen. */
+.autopilot-hint[hidden] {
+  display: none;
+}
+
+/* Visually a 16px dot (unchanged), but `::before` invisibly pads its real
+   click/tap area out to 32px — same fix as the waypoint drag handle and
+   map markers (see their own comments: a bare icon-sized hitbox is
+   precise to the point of unusable, worse on touch), without changing
+   the bubble's footprint the way actually growing the button would. */
+.autopilot-hint-close {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  min-height: 0;
+  padding: 0;
+  border: none;
+  background: rgb(255 255 255 / 20%);
+  border-radius: 50%;
+  color: white;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.autopilot-hint-close::before {
+  content: "";
+  position: absolute;
+  inset: -8px;
+}
+
+.autopilot-hint-close:hover {
+  background: rgb(255 255 255 / 32%);
+}
+
+.autopilot-hint-arrow {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  color: var(--primary);
+  line-height: 0;
+}
+
+@keyframes autopilot-hint-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 6px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
 /* Desktop preview: the rendered world stands in for the camera feed, so it
    fills the viewport and sits BELOW the HUD and the map in the stack, exactly
    where the camera feed sits in a real session. */

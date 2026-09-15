@@ -615,6 +615,7 @@ export function mountViewingApp(
         const next = !preview.isAutopilot();
         preview.setAutopilot(next);
         hud?.setAutopilotLabel(next ? "Stop auto-walk" : "Auto-walk");
+        hud?.dismissAutopilotHint();
       },
     });
 
@@ -648,15 +649,14 @@ export function mountViewingApp(
       },
     });
 
-    // A touch-primary device has no WASD: default to the breadcrumb autopilot
-    // instead of a manual walk it has no way to drive (VC25 offers this
-    // preview specifically when AR — the phone's normal way in — is
-    // unavailable, so most visitors landing here are on a phone).
+    // Autopilot starts OFF regardless of device — the visitor stays in
+    // control of how they move from the first frame. A touch-primary
+    // device has no WASD and no other way to walk manually, so it's the
+    // one that actually needs Auto-walk; the HUD's one-time callout above
+    // that button (not this status line alone) is what tells it exists.
     if (isTouchPrimaryDevice()) {
-      session.setAutopilot(true);
-      hud?.setAutopilotLabel("Stop auto-walk");
       hud?.setStatus(
-        "Preview — auto-walking the route, drag to look around, tap a stop to hear it.",
+        "Preview — drag to look around, tap a stop to hear it. Tap Auto-walk below to walk the route.",
       );
     } else {
       hud?.setStatus(
