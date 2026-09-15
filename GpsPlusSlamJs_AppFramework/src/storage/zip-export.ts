@@ -40,6 +40,19 @@ export interface ZipExportResult {
 }
 
 /**
+ * Thrown by {@link downloadZip} when the user dismisses the native save
+ * dialog instead of picking a location. Distinct from a save failure so
+ * callers can leave the user where they were rather than treating the
+ * cancellation as a completed export.
+ */
+export class DownloadCancelledError extends Error {
+  constructor() {
+    super('Download cancelled');
+    this.name = 'DownloadCancelledError';
+  }
+}
+
+/**
  * Helper passed to a {@link ZipExportContributor.contribute} callback for
  * appending blobs to the ZIP under a stable, contributor-owned subdirectory.
  *
@@ -335,9 +348,10 @@ export async function downloadZip(blob: Blob, filename: string): Promise<void> {
     } catch (err) {
       const error = err as Error;
       if (error.name === 'AbortError') {
-        // User cancelled - don't fall through
+        // User cancelled - don't fall through, and don't report success:
+        // a caller waiting on this promise needs to know nothing was saved.
         log.info('User cancelled save dialog');
-        return;
+        throw new DownloadCancelledError();
       }
       // Fall through to <a download> fallback
       log.warn('showSaveFilePicker failed, using fallback:', error.message);

@@ -56,6 +56,7 @@ export {
   exportSessionHandleAsZip,
   syncToExternalZip,
   downloadZip,
+  DownloadCancelledError,
 } from './zip-export.js';
 
 // --- zip-reader ---
