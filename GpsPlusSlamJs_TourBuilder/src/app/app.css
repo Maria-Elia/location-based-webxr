@@ -311,24 +311,19 @@ p[data-testid="qr-status"] {
   color: var(--error);
 }
 
-/* ── Demo-tour chip (Authoring landing, before the onboarding gate) ─────── */
+/* ── Demo-tour chip (landing screen, before mode is chosen) ──────────────── */
 
 /* A secondary affordance, not a second primary action — sized to its
-   content and centered, not stretched to the shell's full column width
-   like every other direct `#app-root` child. Same pill language as
-   `.map-badge` rather than a bare underlined link. */
-/* Specificity note: `#app-root > *` is an ID selector and would otherwise
-   beat a bare `.demo-tour-chip` class, so the width override has to be
-   qualified the same way to actually win. */
-#app-root > .demo-tour-chip {
+   content and centered, not stretched to the grid track's full width like
+   every other child of `.landing`. Lives inside `.landing` (a grid), whose
+   items stretch by default, hence `justify-self: center` rather than the
+   `margin: 0 auto` a block context would use. */
+.landing > .demo-tour-chip {
   display: inline-flex;
-  align-self: center;
+  justify-self: center;
   align-items: center;
-  gap: 6px;
-  width: auto;
-  max-width: none;
-  margin: 0 auto;
-  padding: 7px 14px 7px 12px;
+  gap: 7px;
+  padding: 8px 14px 8px 12px;
   border-radius: var(--radius-full);
   background: var(--surface);
   border: 1px solid var(--border);
@@ -336,24 +331,141 @@ p[data-testid="qr-status"] {
   font-size: 13px;
   font-weight: 500;
   text-decoration: none;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 20%);
   transition:
     background var(--duration-base) var(--ease-out),
-    border-color var(--duration-base) var(--ease-out);
+    border-color var(--duration-base) var(--ease-out),
+    box-shadow var(--duration-base) var(--ease-out),
+    transform var(--duration-base) var(--ease-out);
 }
 
 .demo-tour-chip svg {
   flex-shrink: 0;
 }
 
+/* The trailing chevron is the chip's one authored motion: it reads as "this
+   leads somewhere" and nudges forward on hover/focus, echoing the lift. */
+.demo-tour-chip-arrow {
+  display: inline-flex;
+  color: var(--text-muted);
+  transition:
+    transform var(--duration-base) var(--ease-out),
+    color var(--duration-base) var(--ease-out);
+}
+
 .demo-tour-chip:hover,
 .demo-tour-chip:focus-visible {
   background: var(--surface-hover);
   border-color: var(--border-strong);
+  box-shadow: 0 4px 10px rgb(0 0 0 / 28%);
+  transform: translateY(-1px);
+}
+
+.demo-tour-chip:hover .demo-tour-chip-arrow,
+.demo-tour-chip:focus-visible .demo-tour-chip-arrow {
+  color: var(--accent);
+  transform: translateX(2px);
+}
+
+.demo-tour-chip:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 20%);
 }
 
 .demo-tour-chip:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+/* ── Landing screen (root-URL entry, before mode is chosen) ──────────────── */
+
+.landing {
+  display: grid;
+  gap: var(--space-fluid-3);
+  padding-top: var(--space-4);
+}
+
+.landing-title {
+  margin: 0 0 var(--space-2);
+  font-size: clamp(22px, 18px + 2.5vw, 28px);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* Two-line action buttons (icon + heading + supporting line). The generic
+   `button` rule already sets padding/bg/border/radius — this only adds the
+   icon+text row layout and the extra vertical room a second text line
+   needs. Deliberately two differently-weighted actions, not three identical
+   icon-cards: creating is the action anyone landing on the bare root URL
+   almost always wants (a real visitor arrives already holding `?tour=`),
+   pasting a link is the fallback, so only the first is `.primary`. */
+.landing-action {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: 0;
+  padding: var(--space-4);
+  text-align: left;
+}
+
+.landing-action > svg {
+  flex-shrink: 0;
+  color: var(--accent);
+}
+
+.landing-action > span {
+  display: grid;
+  gap: 2px;
+}
+
+.landing-action strong {
+  font-weight: 600;
+}
+
+.landing-action small {
+  color: var(--text-muted);
+  font-weight: 400;
+  font-size: var(--text-fluid-sm);
+}
+
+.landing-link-section {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.landing-link-form {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-fluid-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+/* `display: grid` above otherwise beats the UA stylesheet's `[hidden] {
+   display: none }` (same specificity, author rule loads later), so the
+   collapsed form would render open on first paint. */
+.landing-link-form[hidden] {
+  display: none;
+}
+
+.landing-link-form .field {
+  margin-bottom: 0;
+}
+
+.landing-dev-link {
+  justify-self: center;
+  margin-top: var(--space-2);
+  color: var(--text-muted);
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.landing-dev-link:hover,
+.landing-dev-link:focus-visible {
+  color: var(--text);
 }
 
 /* ── Onboarding gate (component 9 — no classNames, styled via testid) ──── */

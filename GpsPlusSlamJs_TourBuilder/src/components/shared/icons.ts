@@ -19,4 +19,7 @@ export const ICONS = {
   spinner:
     '<svg width="14" height="14" viewBox="0 0 16 16" class="icon-spin"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="28" stroke-dashoffset="10"/></svg>',
   pin: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"><path d="M12 21s7-7.5 7-12a7 7 0 1 0-14 0c0 4.5 7 12 7 12Z"/><circle cx="12" cy="9" r="2.3"/></svg>',
+  route:
+    '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"><circle cx="5" cy="18" r="2.2"/><circle cx="19" cy="6" r="2.2"/><path d="M5 15.8 C5 11 9.5 11.5 9.5 8.3 C9.5 5.7 13.5 5.5 13.8 8 C14.1 10.5 19 10 19 8.2"/></svg>',
+  link: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 14.5 L14.5 9.5"/><path d="M8 16.5 L6 18.5 A3.6 3.6 0 0 1 0.9 13.4 L4.4 9.9 A3.6 3.6 0 0 1 9 9.7"/><path d="M16 7.5 L18 5.5 A3.6 3.6 0 0 1 23.1 10.6 L19.6 14.1 A3.6 3.6 0 0 1 15 14.3"/></svg>',
 } as const;

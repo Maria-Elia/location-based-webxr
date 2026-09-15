@@ -178,7 +178,12 @@ function viewDeps() {
     ) => {
       try {
         const blob = await packTour(tour, new Map(assetFiles));
-        await downloadZip(blob, "tour.zip");
+        // downloadZip resolves `false` (never throws) on a dismissed save
+        // dialog — turn that into a rejection so the catch below (and the
+        // view's own error handling) treat a cancel like any other failure
+        // instead of reporting success.
+        const saved = await downloadZip(blob, "tour.zip");
+        if (!saved) throw new Error("Download cancelled.");
         exportStatusEl.textContent = `Packed tour.zip: ${blob.size.toLocaleString()} bytes, ${tour.waypoints.length} waypoint(s).`;
         exportStatusEl.dataset["state"] = "ok";
       } catch (error) {

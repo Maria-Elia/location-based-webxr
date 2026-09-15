@@ -3,7 +3,7 @@
  * bootstrap, by `?tour=` presence (contract D13) — see `mode.ts`.
  */
 import { isPreviewRequested, resolveAppMode } from "./mode.js";
-import { mountAuthoringApp } from "./authoring/authoring-app.js";
+import { mountLandingScreen } from "./landing/landing-screen.js";
 import { mountViewingApp } from "./viewing/viewing-app.js";
 
 const root = document.getElementById("app-root");
@@ -15,7 +15,7 @@ const url = new URL(location.href);
 const mode = resolveAppMode(url);
 
 if (mode === "authoring") {
-  mountAuthoringApp(root);
+  mountLandingScreen(root);
 } else {
   // `?tour=` is read once, here: component 6 owns the zip reading and the
   // share-link normalisation, but not the URL parsing (its decision C3).
