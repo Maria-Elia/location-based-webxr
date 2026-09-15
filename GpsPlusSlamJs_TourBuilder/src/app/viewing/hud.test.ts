@@ -107,9 +107,7 @@ describe("mountHud", () => {
     expect(query(container, "viewing-hud-status")!.hidden).toBe(false);
 
     hud.showNotice("careful");
-    expect(query(container, "viewing-hud-notice")!.textContent).toBe(
-      "careful",
-    );
+    expect(query(container, "viewing-hud-notice")!.textContent).toBe("careful");
     expect(query(container, "viewing-hud-notice")!.hidden).toBe(false);
 
     hud.setMapToggleLabel("Hide map");

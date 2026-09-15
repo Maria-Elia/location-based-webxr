@@ -25,10 +25,7 @@ import type { TourCoord } from "../../store/types.js";
 import { mountOnboardingGate } from "../../components/onboarding/view/onboarding-view.js";
 import { createLiveGpsPositionSource } from "../../components/authoring/view/gps-position-source.js";
 import { createFilesAssetProvider } from "../../components/authoring/view/files-asset-provider.js";
-import {
-  createAuthoringSession,
-  type AuthoringSession,
-} from "../../components/authoring/view/authoring-session.js";
+import { createAuthoringSession } from "../../components/authoring/view/authoring-session.js";
 import { mountAuthoringView } from "../../components/authoring/view/authoring-view.js";
 import { computeMarkerViewModels } from "../../components/map/core/map-marker-state.js";
 import { createTourMap } from "../../components/map/view/tour-map.js";
@@ -172,13 +169,11 @@ async function mountAuthoringTools(
   const mapHost = document.createElement("div");
   mapHost.className = "map-card map-card-flush map-card-fullscreen";
   mapShell.appendChild(mapHost);
-  // `session` and `authoringRoot` (the floating panel) are both created
-  // below, but the map needs to reference them now — resolved via these
-  // forward references, since neither callback runs until well after the
-  // rest of this function has finished assigning them (a real user click,
-  // or the next GPS fix/waypoint-list change).
-  let session: AuthoringSession | undefined;
-  let authoringRoot: HTMLElement | undefined;
+  // `session` and `authoringRoot` (the floating panel) are each declared
+  // `const` further down, but the map's callbacks close over them here —
+  // safe because neither callback runs until well after the rest of this
+  // function has finished (a real user click, or the next GPS
+  // fix/waypoint-list change), by which point those `const`s have run.
   // Full-bleed and interactive: the map IS the authoring screen now, so
   // the author can pan/zoom to see the route, drag a marker to fine-tune
   // its position, or click an empty spot to drop one exactly there — three
@@ -190,7 +185,7 @@ async function mountAuthoringTools(
       dispatch(updateWaypoint({ id, changes: { position: { lat, lon } } }));
     },
     onDropWaypointHere: (lat, lon) => {
-      session?.dropWaypoint({ lat, lon });
+      session.dropWaypoint({ lat, lon });
     },
     // On desktop the panel is a sidebar (doesn't cover the map's bottom
     // edge at all); on mobile it's a bottom sheet that does, and its own
@@ -200,7 +195,7 @@ async function mountAuthoringTools(
     getObscuredBottomPx: () =>
       window.innerWidth > 720
         ? 0
-        : (authoringRoot?.getBoundingClientRect().height ?? 0),
+        : authoringRoot.getBoundingClientRect().height,
   });
   tourMap?.show();
 
@@ -244,14 +239,14 @@ async function mountAuthoringTools(
   };
 
   const filesAssetProvider = createFilesAssetProvider();
-  session = createAuthoringSession({
+  const session = createAuthoringSession({
     positionSource: withMapSync,
     dispatch,
     getState: store.getState,
     filesAssetProvider,
   });
 
-  authoringRoot = document.createElement("div");
+  const authoringRoot = document.createElement("div");
   authoringRoot.className = "authoring-sections";
   toolsHost.appendChild(authoringRoot);
 

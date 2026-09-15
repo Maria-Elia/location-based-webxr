@@ -574,9 +574,16 @@ describe("mountAuthoringView", () => {
     document.dispatchEvent(new PointerEvent("pointermove", { clientY: 130 }));
     expect(
       Array.from(list.children).map((c) =>
-        c === placeholder ? "placeholder" : (c as HTMLElement).dataset["testid"],
+        c === placeholder
+          ? "placeholder"
+          : (c as HTMLElement).dataset["testid"],
       ),
-    ).toEqual(["waypoint-wp-2", "waypoint-wp-3", "waypoint-wp-1", "placeholder"]);
+    ).toEqual([
+      "waypoint-wp-2",
+      "waypoint-wp-3",
+      "waypoint-wp-1",
+      "placeholder",
+    ]);
     expect(wp2Card.style.transform).not.toBe("");
 
     document.dispatchEvent(new PointerEvent("pointerup"));
@@ -585,9 +592,11 @@ describe("mountAuthoringView", () => {
       type: "authoring/moveWaypoint",
       payload: { id: "wp-1", toIndex: 2 },
     });
-    expect(Array.from(list.children).map((c) => (c as HTMLElement).dataset["testid"])).toEqual(
-      ["waypoint-wp-2", "waypoint-wp-3", "waypoint-wp-1"],
-    );
+    expect(
+      Array.from(list.children).map(
+        (c) => (c as HTMLElement).dataset["testid"],
+      ),
+    ).toEqual(["waypoint-wp-2", "waypoint-wp-3", "waypoint-wp-1"]);
     expect(draggedCard.classList.contains("dragging")).toBe(false);
     expect(draggedCard.style.position).toBe("");
     expect(list.querySelector(".wp-drag-placeholder")).toBeNull();
@@ -674,9 +683,7 @@ describe("mountAuthoringView", () => {
       // The hold-to-drag's own pointerup (not the manufactured `click`
       // used in the tap test above) must NOT also toggle the card open —
       // that's exactly what `dragJustHappened` exists to prevent.
-      document.dispatchEvent(
-        new PointerEvent("pointerup", { pointerId: 1 }),
-      );
+      document.dispatchEvent(new PointerEvent("pointerup", { pointerId: 1 }));
       header.dispatchEvent(new Event("click", { bubbles: true }));
       expect(byTestId(root, "waypoint-wp-1").classList.contains("open")).toBe(
         false,

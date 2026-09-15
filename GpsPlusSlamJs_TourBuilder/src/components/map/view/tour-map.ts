@@ -161,12 +161,7 @@ function buildWaypointIconHtml(
   // waypoint panel already shows ("Waypoint 1", "Waypoint 2", …), not a
   // proximity/activation order (plan D3: that's distance-based, never
   // list-order-based).
-  const label =
-    status === "visited"
-      ? "✓"
-      : order <= 99
-        ? String(order)
-        : "";
+  const label = status === "visited" ? "✓" : order <= 99 ? String(order) : "";
   const fontSize = order >= 10 ? 9 : 11;
   const glyph = label
     ? `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:white;font-size:${fontSize}px;font-weight:600;line-height:1;">${label}</div>`
@@ -255,7 +250,10 @@ export function createTourMap(
           // on screen — tell it the bottom sheet's live height counts as
           // "off screen" too, so a tap near the bottom doesn't open a
           // popup that ends up hidden underneath it.
-          autoPanPaddingBottomRight: [20, 20 + (options.getObscuredBottomPx?.() ?? 0)],
+          autoPanPaddingBottomRight: [
+            20,
+            20 + (options.getObscuredBottomPx?.() ?? 0),
+          ],
         })
         .openPopup();
       // Closing the popup (the ✕, Escape, or clicking elsewhere on the map
@@ -388,7 +386,12 @@ export function createTourMap(
           const zoom = leafletMap.getZoom();
           const obscured = options.getObscuredBottomPx?.() ?? 0;
           leafletMap.setView(
-            offsetTargetForObscuredBottom(leafletMap, lastPosition, zoom, obscured),
+            offsetTargetForObscuredBottom(
+              leafletMap,
+              lastPosition,
+              zoom,
+              obscured,
+            ),
             zoom,
           );
         }
