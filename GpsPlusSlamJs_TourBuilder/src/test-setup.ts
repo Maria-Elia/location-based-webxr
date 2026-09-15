@@ -30,10 +30,10 @@ if (
   Blob.prototype.stream = function (
     this: Blob,
   ): ReadableStream<Uint8Array<ArrayBuffer>> {
-    const blob = this;
+    const getArrayBuffer = this.arrayBuffer.bind(this);
     return new ReadableStream<Uint8Array<ArrayBuffer>>({
       async start(controller) {
-        controller.enqueue(new Uint8Array(await blob.arrayBuffer()));
+        controller.enqueue(new Uint8Array(await getArrayBuffer()));
         controller.close();
       },
     });
