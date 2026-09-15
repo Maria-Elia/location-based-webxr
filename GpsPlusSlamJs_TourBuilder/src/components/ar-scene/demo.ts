@@ -272,6 +272,3 @@ function frame(now: number): void {
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
-
-status.textContent =
-  "Press Play to walk the recorded route. Tap a knight when it appears to hear its story.";
