@@ -472,7 +472,19 @@ export function mountViewingApp(
 
     const result = await controller.enable({
       container: arHost,
-      isolationOptions: { enableDomOverlay: true },
+      // The viewing app needs only DOM overlay (the HUD/map composite). The
+      // framework's crash-isolation defaults enable camera-access and
+      // depth-sensing too, but nothing here primes those permission-gated
+      // features (only `requestDepth: true` does — see enable-gps-ar.ts) and
+      // this app never uses them. Requesting them un-primed makes real
+      // Android devices reject the whole session with "the specified session
+      // config is not supported" instead of just omitting the feature.
+      isolationOptions: {
+        enableDomOverlay: true,
+        enableCameraAccess: false,
+        enableDepthSensingFeature: false,
+        enableCameraTextureAcquisition: false,
+      },
       callbacks: {
         tracking: { store },
         onSessionEnd: () => {

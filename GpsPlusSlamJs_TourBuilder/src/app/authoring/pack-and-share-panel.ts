@@ -39,7 +39,7 @@ export function mountPackAndSharePanel(root: HTMLElement): {
   zipUrlInput.type = "url";
   zipUrlInput.placeholder = "Paste the shared link after uploading tour.zip";
   const zipUrlField = buildLabeledField(
-    "Google Drive / OneDrive / Dropbox link",
+    "OneDrive / Dropbox link",
     zipUrlInput,
     "zip-url",
   );

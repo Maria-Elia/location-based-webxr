@@ -104,7 +104,12 @@ function fakeController(
   const enable = vi.fn(
     (config: {
       callbacks?: { onSessionEnd?: () => void };
-      isolationOptions?: { enableDomOverlay?: boolean };
+      isolationOptions?: {
+        enableDomOverlay?: boolean;
+        enableCameraAccess?: boolean;
+        enableDepthSensingFeature?: boolean;
+        enableCameraTextureAcquisition?: boolean;
+      };
       container?: HTMLElement;
     }) => {
       capturedOnSessionEnd = config.callbacks?.onSessionEnd ?? null;
@@ -404,6 +409,15 @@ describe("Viewing mode screen flow", () => {
     });
     const config = enable.mock.calls[0]![0];
     expect(config.isolationOptions?.enableDomOverlay).toBe(true);
+    // The viewing app never primes the depth/camera-access permission probe
+    // (only `requestDepth: true` does, per enable-gps-ar.ts's contract), so it
+    // must not leave these framework defaults (both `true`) turned on: a real
+    // device rejects the immersive-ar session outright with "the specified
+    // session config is not supported" when an un-primed permission-gated
+    // feature is requested.
+    expect(config.isolationOptions?.enableCameraAccess).toBe(false);
+    expect(config.isolationOptions?.enableDepthSensingFeature).toBe(false);
+    expect(config.isolationOptions?.enableCameraTextureAcquisition).toBe(false);
     // The HUD must be a DESCENDANT of the element handed to initAR, or WebXR
     // DOM Overlay will not composite it over the camera feed.
     expect(config.container?.contains(query(root, "viewing-hud"))).toBe(true);
