@@ -131,12 +131,31 @@ test("palette button cycles the palette and the choice persists across reload", 
   await expect(page.locator(`html[data-theme="${cycled}"]`)).toBeAttached();
 });
 
-test("all six demo apps stay launchable from the demos hub", async ({
+test("a ?qr= launch forwards to the tour viewer with the payload intact", async ({
+  page,
+}) => {
+  // Why this matters: printed QR codes encode the BARE host so the densest
+  // QR forms stay available (ZD-9); this forward is the only thing standing
+  // between a physical, unchangeable printout and a dead link. The dev
+  // server SPA-falls-back on /tour/, so the URL is the assertion. The head
+  // script replaces the location DURING the first load, which aborts that
+  // navigation (net::ERR_ABORTED) — expected, hence the catch.
+  await page
+    .goto("/?qr=https%3A%2F%2Fexample.com%2Ftour.zip&nocache=1")
+    .catch(() => undefined);
+  // RegExp, not a URL glob: a glob's `?` is a single-character wildcard and
+  // can never match the literal query separator.
+  await page.waitForURL(/\/tour\/\?qr=https%3A%2F%2Fexample\.com%2Ftour\.zip/);
+});
+
+test("all eight demo apps stay launchable from the demos hub", async ({
   page,
 }) => {
   await page.goto("/");
   // Keep in sync with requiredDemoLinks in scripts/build-site.mjs (the
   // deploy-time guard); this e2e re-checks the same set in the LIVE page.
+  // (/osm/ had been missing from this list since that card was added —
+  // PR #357 review.)
   for (const href of [
     "/starter/",
     "/minimal/",
@@ -144,6 +163,8 @@ test("all six demo apps stay launchable from the demos hub", async ({
     "/recorder/",
     "/physics/",
     "/wayfinding/",
+    "/osm/",
+    "/tour/",
   ]) {
     const card = page.locator(`a.demo-card[href="${href}"]`);
     await expect(card).toBeAttached();
@@ -151,7 +172,24 @@ test("all six demo apps stay launchable from the demos hub", async ({
     // outbound click keeps the landing alive in the background.
     await expect(card).toHaveAttribute("target", "_blank");
     await expect(card).toHaveAttribute("rel", /noopener/);
+    // Every card carries a title and a description, and no description
+    // makes the retired claim: "Desktop only, no AR needed" survived on the
+    // OSM card for weeks after that demo gained AR entry (owner taste
+    // round 2026-09-04) — the deploy guard and this loop only ever checked
+    // the hrefs, so a stale sentence had nothing to fail.
+    await expect(card.locator("strong")).not.toHaveText("");
+    await expect(card.locator("small")).not.toHaveText("");
+    await expect(card).not.toContainText("Desktop only");
   }
+  // The two cards the taste round renamed: the OSM demo is named for the
+  // data it scores, not for a term ("affordance") a visitor has to look up;
+  // the tour viewer is a demo of the entry story, not a template to fork.
+  await expect(page.locator('a.demo-card[href="/osm/"] strong')).toHaveText(
+    "OpenStreetMap Demo",
+  );
+  await expect(page.locator('a.demo-card[href="/tour/"] strong')).toHaveText(
+    "Tour Viewer Demo",
+  );
   // Round-9 R9-4: ONE primary CTA carrying the GitHub mark (the separate
   // "Open source on GitHub" badge duplicated it and was removed), and
   // every external link opens a NEW TAB — the landing must stay open.

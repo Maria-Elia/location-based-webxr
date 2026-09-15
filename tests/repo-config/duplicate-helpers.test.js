@@ -38,6 +38,12 @@
 //  - **A class method or object-literal shorthand is not matched.**
 //    `class Util { clamp01(v) {} }` reads as a member, and matching that shape
 //    would collide with every ordinary method name.
+//  - **An UNTRACKED file is invisible.** `git ls-files` lists tracked paths
+//    only, so a canonical helper newly created and not yet `git add`ed is not
+//    found — which surfaces as the non-vacuity check below failing rather than
+//    as a missed duplicate, i.e. it fails loudly and in the safe direction.
+//    Staging the file fixes it; CI is unaffected because it only ever sees
+//    committed trees. Found on 2026-08-29 while adding `normalizeBearingDeg`.
 //
 // It is still worth having: every entry below is a unification that was paid
 // for once, and this is what stops it being undone by the next session that
@@ -48,7 +54,7 @@
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { describe, it, expect } from 'vitest';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -94,6 +100,55 @@ const CANONICAL = [
     rule: 'perPackage',
     why: 'three character-identical copies three files apart in one package',
   },
+  // The median family. `utils/median.ts` was created by the 2026-07-10
+  // quality review to replace SIX private copies carrying two silently
+  // different even-length rules, which is the most expensive unification in
+  // this list — and it was the one name the guard never learned, so a
+  // seventh copy appeared in the same package. Named exports get the
+  // `shared` rule because picking the wrong rule is the whole failure mode;
+  // the generic `median` gets `perPackage` for packages that cannot reach
+  // the framework.
+  {
+    name: 'interpolatingMedian',
+    rule: 'shared',
+    home: 'GpsPlusSlamJs_AppFramework/src/utils/median.ts',
+    why: 'the even-length rule is a contract — averaging two middles fabricates a value that was never observed',
+  },
+  {
+    name: 'lowerMedian',
+    rule: 'shared',
+    home: 'GpsPlusSlamJs_AppFramework/src/utils/median.ts',
+    why: 'the counterpart rule, and the copy that came back: elevation-offset-estimator.ts had its own by 2026-08-29',
+  },
+  {
+    name: 'weightedMedian',
+    rule: 'shared',
+    home: 'GpsPlusSlamJs_AppFramework/src/utils/median.ts',
+    why: 'its tie-breaking matches the core library’s private solver median, cross-checked in Investigation; a second copy here would drift from a helper it cannot see',
+  },
+  {
+    name: 'cubicBezierEasing',
+    rule: 'shared',
+    home: 'GpsPlusSlamJs_AppFramework/src/utils/cubic-bezier-easing.ts',
+    why: 'the wayfinding HUD mirrors a CSS animation whose easing is the token `--ease-out`; a second evaluator (or a look-alike `easeOutCubic`, of which Landing already has one) would drift from the sheet in every frame between the endpoints',
+  },
+  {
+    name: 'normalizeBearingDeg',
+    rule: 'shared',
+    home: 'GpsPlusSlamJs_AppFramework/src/utils/bearing-degrees.ts',
+    why: 'six unnamed copies of `((deg % 360) + 360) % 360` in one package, and the early return that separates the correct form from them is a CONTRACT — without it `360 − ε` snaps to 0, a full turn that never happened (core-library fast-check counterexample −2.842e−14). A guard entry cannot see the unnamed form, but it can stop the seventh NAMED one',
+  },
+  {
+    name: 'bearingDeltaDeg',
+    rule: 'shared',
+    home: 'GpsPlusSlamJs_AppFramework/src/utils/bearing-degrees.ts',
+    why: 'the recorder and the framework each had an unnamed signed-delta expression, and they disagreed at exactly 180° - two conventions for one quantity, one of them on the bare double-mod the sibling normalizer exists to replace',
+  },
+  {
+    name: 'median',
+    rule: 'perPackage',
+    why: 'the unqualified name says nothing about the even-length rule, so two of them in one package is two rules nobody chose between - which is what GpsPlusSlamJs_Osm had',
+  },
 ];
 
 /**
@@ -136,7 +191,13 @@ function sourceFiles() {
     .split('\n')
     .filter(Boolean)
     .filter((file) => !file.endsWith('.d.ts'))
-    .filter((file) => !/\.(test|spec)\.ts$/.test(file));
+    .filter((file) => !/\.(test|spec)\.ts$/.test(file))
+    // The mirror of "an untracked file is invisible": a tracked file DELETED
+    // but not yet staged is still listed, and reading it threw ENOENT, so the
+    // gate crashed on every deletion until the deletion was staged (found
+    // 2026-09-04 deleting `ref-point-importer.ts`). A missing file defines
+    // nothing; skip it. CI is unaffected — it only sees committed trees.
+    .filter((file) => existsSync(resolve(repoRoot, file)));
 }
 
 /**

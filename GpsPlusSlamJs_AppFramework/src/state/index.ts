@@ -99,7 +99,15 @@ export {
 // --- library re-exports (kept here for backwards-compat with existing
 //     `gps-plus-slam-app-framework/state` imports). ---
 export {
+  teardownArSessionState,
+  type ArTeardownStore,
+} from './ar-session-teardown.js';
+
+export {
   setZeroPos,
+  // Drops per-session odometry↔GPS pairs while keeping the zero — the AR
+  // session-end teardown action (core 1.20; the re-entry blend fix).
+  resetGpsSessionData,
   recordGpsEvent,
   add2dImage,
   calcRelativeCoordsInMeters,
@@ -131,8 +139,25 @@ export {
   // The readout half. Publishing observability and the applied weight is
   // pointless if no consumer can select them, and the same "second hop" applies.
   getCompassDiagnostics,
+  // ADDED 2026-09-02 with core 1.23.0 for the recorder's in-recording field
+  // wheel (rotation-first search plan D6-D8): a whole preset in public names,
+  // the hard pair-selection mode and its trust prerequisite, the robust
+  // solver's heading penalty, and the mode lists consumers derive their
+  // dropdowns from instead of mirroring the unions (a mirrored union is how a
+  // fourth gate mode would have compiled everywhere and appeared nowhere).
+  setAlignmentOverrides,
+  setCompassPairSelectionMode,
+  setCompassPairSelectionRequireTrust,
+  setConsensusSolverHeadingPenalty,
+  ALIGNMENT_OVERRIDE_KEYS,
+  COMPASS_TRUST_GATE_MODES,
+  COMPASS_PAIR_SELECTION_MODES,
 } from 'gps-plus-slam-js';
-export type { CompassTrustGateMode } from 'gps-plus-slam-js';
+export type {
+  CompassTrustGateMode,
+  CompassPairSelectionMode,
+  AlignmentOverrides,
+} from 'gps-plus-slam-js';
 export type {
   LatLong,
   GpsPoint,
@@ -175,7 +200,7 @@ export {
 //     (`OCCLUDER_DEBUG_STYLES` / `OccluderDebugStyle`). ---
 
 // --- recording-replayer ---
-export { replayRecording } from './recording-replayer.js';
+export { replayActions, replayRecording } from './recording-replayer.js';
 export type { ReplayRecordingOptions } from './recording-replayer.js';
 
 // --- persistence-middleware ---

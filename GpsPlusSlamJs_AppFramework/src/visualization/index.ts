@@ -27,6 +27,24 @@ export {
   createCss3dRendererManager,
 } from './css3d-renderer-manager.js';
 
+// --- diamond-entrance ---
+export {
+  DIAMOND_ENTRANCE,
+  DIAMOND_ENTRANCE_SETTLED,
+  type DiamondEntranceOptions,
+  type DiamondEntranceState,
+  computeDiamondEntrance,
+} from './diamond-entrance.js';
+
+// --- diamond-marker-texture ---
+export {
+  DEFAULT_DIAMOND_HALO,
+  DIAMOND_GEOMETRY,
+  type DiamondMarkerTexture,
+  type DiamondMarkerTextureOptions,
+  createDiamondMarkerTexture,
+} from './diamond-marker-texture.js';
+
 // --- gps-compass-cubes ---
 export {
   COMPASS_CUBE_SIZE,
@@ -144,14 +162,30 @@ export {
   createTextSprite,
 } from './text-sprite.js';
 
+// frame-texture-decoder is deliberately NOT re-exported here: every consumer
+// deep-imports `visualization/frame-texture-decoder` (this barrel feeds the
+// package-root `export *`, and DEC-H3's shared helpers stay off the root
+// export surface; the barrel is also unusable in node unit tests — leaflet).
+
 // --- wayfinding-hud (frustum-locked target indicators as camera children) ---
 export {
   type WayfindingHud,
   type WayfindingHudOptions,
   DEFAULT_WAYFINDING_HUD,
+  DEFAULT_CIRCLE_ENTRANCE,
+  type CircleEntranceOptions,
+  type EntranceStats,
   createWayfindingHud,
   validateWayfindingHudOptions,
 } from './wayfinding-hud.js';
+
+// --- wayfinding-targets (the HUD's getTargets() boundary triage, pure) ---
+export {
+  type ResolvedTarget,
+  type TargetResolver,
+  type TargetResolverOptions,
+  createTargetResolver,
+} from './wayfinding-targets.js';
 
 // --- wayfinding-placement (pure seam of the wayfinding HUD) ---
 export {

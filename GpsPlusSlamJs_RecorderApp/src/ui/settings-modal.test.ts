@@ -899,8 +899,7 @@ describe('settings-modal', () => {
         unknown
       >;
       const flags = saved.arCrashIsolation as
-        | Record<string, unknown>
-        | undefined;
+        Record<string, unknown> | undefined;
       expect(flags?.enableCss3dRenderer).toBe(false);
     });
   });
@@ -1295,7 +1294,7 @@ describe('settings-modal', () => {
       // 2026-07-19 field-test toggles (enablement plan): the experiment combo
       // (prior + tolerance 15° + C′) and the alternative robust-solver comparison arm.
       ['compass-experiment', 'experiment'],
-      ['compass-robust-solver-comparison', 'robustSolverComparison'],
+      ['compass-consensus-solver-comparison', 'consensusSolverComparison'],
     ] as const;
 
     const COMPASS_DEFAULT_CHECKED: Record<
@@ -1306,7 +1305,7 @@ describe('settings-modal', () => {
       rotationPrior: false,
       webXRConsistency: false,
       experiment: false,
-      robustSolverComparison: false,
+      consensusSolverComparison: false,
     };
 
     it('default checkbox states match the per-flag defaults (Stage 0 on, others off)', () => {
@@ -1581,8 +1580,7 @@ describe('settings-modal', () => {
 
       const working = getWorkingOptions() as Record<string, unknown> | null;
       const flags = working?.arCrashIsolation as
-        | Record<string, unknown>
-        | undefined;
+        Record<string, unknown> | undefined;
 
       expect(working?.images).toEqual(
         expect.objectContaining({ enabled: false })
@@ -1624,8 +1622,7 @@ describe('settings-modal', () => {
         unknown
       >;
       const flags = saved.arCrashIsolation as
-        | Record<string, unknown>
-        | undefined;
+        Record<string, unknown> | undefined;
       expect(flags?.applyChromiumProjectionLayerWorkaround).toBe(false);
     });
 

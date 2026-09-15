@@ -28,9 +28,13 @@
 import * as THREE from 'three';
 import { registerFrameUpdate } from '../ar/frame-loop.js';
 import { registerSessionDisposer } from '../ar/session-disposers.js';
-import { createLogger } from '../utils/logger';
 import { clampedAlpha } from './lerp-utils.js';
 import { createTextSprite, type TextSprite } from './text-sprite.js';
+import {
+  createTargetResolver,
+  type ResolvedTarget,
+  type WayfindingTarget,
+} from './wayfinding-targets.js';
 import {
   computeTargetPlacement,
   type ArrowPlacement,
@@ -39,39 +43,94 @@ import {
   type TargetPlacementState,
 } from './wayfinding-placement.js';
 
-const log = createLogger('WayfindingHud');
+import {
+  computeDiamondEntrance,
+  type DiamondEntranceState,
+} from './diamond-entrance.js';
+import {
+  createDiamondMarkerTexture,
+  type DiamondMarkerTexture,
+} from './diamond-marker-texture.js';
+
+export type { WayfindingTarget } from './wayfinding-targets.js';
 
 /**
- * One wayfinding target as returned by {@link WayfindingHudOptions.getTargets}
- * (2026-07-20 per-target config plan — clean break from the earlier
- * `Vector3[]` contract).
+ * Opt-in: the circle indicator is the design system's diamond BUILDING
+ * ITSELF UP (outline drawn over 800 ms, dot popping at 600-850 ms) each
+ * time a target appears or comes back through the distance gate. The
+ * marker is drawn per target into a canvas texture
+ * (`diamond-marker-texture.ts`) from the pure timeline in
+ * `diamond-entrance.ts`. Meant alongside `arrowSprite`: with a procedural
+ * arrow the scene mixes a Sprite circle and a Mesh arrow. Mutually
+ * exclusive with `circleSprite`. Plan:
+ * `GpsPlusSlamJs_Docs/docs/2026-09-05-2138-hud-diamond-entrance-animation-plan.md`.
  */
-export interface WayfindingTarget {
+export interface CircleEntranceOptions {
+  /** The outline and dot-stroke colour — the sheet's `--ink`. */
+  ink: string;
+  /** The dot's fill — the sheet's `--accent`. */
+  accent: string;
+  /** The halo colour; defaults to the SVG's black at 0.8. */
+  halo?: string;
   /**
-   * Stable identity for per-target hysteresis state; must be unique within
-   * one `getTargets()` result. Omit to fall back to index keying (state then
-   * sticks to the array position, not the target — fine for static lists).
+   * Redraw cap while animating, in redraws per second. Default 30: 27
+   * redraws over the 850 ms entrance (the t = 0 frame, 25 capped ones and
+   * the settling frame) instead of one per frame at 90 Hz.
    */
-  id?: string;
-  /** The target's world position. */
-  position: THREE.Vector3;
-  /** Distance (m) below which this target's indicator hides ("arrived").
-   * Defaults to the HUD-level `distanceMin`. */
-  distanceMin?: number;
-  /** Distance (m) this target must reach to reactivate once hidden.
-   * Defaults to the HUD-level `distanceMax`. */
-  distanceMax?: number;
+  redrawHz?: number;
   /**
-   * Show the off-screen edge arrow for this target even while it is
-   * DEACTIVATED (below its `distanceMin`) — the pre-2026-07-18 "always
-   * guide me back" behavior, per target. On-screen it still shows nothing,
-   * and the distanceMax reactivation gate is unaffected. Default false.
+   * Spawns that start in the SAME frame are offset by this many ms each
+   * (0, 60, 120 …), so their redraws do not all land on one frame. Default 60.
    */
-  showArrowWhenInactive?: boolean;
-  /** Show the distance label with the inactive arrow. Default true (old
-   * parity); only meaningful together with `showArrowWhenInactive`. */
-  showLabelWhenInactive?: boolean;
+  staggerMs?: number;
+  /**
+   * Show the complete marker at once. Defaults to the OS setting
+   * (`prefers-reduced-motion: reduce`), read ONCE at creation — the sheet
+   * reacts live, the HUD from the next entrance on.
+   */
+  reducedMotion?: boolean;
 }
+
+/** Defaults for the optional {@link CircleEntranceOptions} fields. */
+export const DEFAULT_CIRCLE_ENTRANCE = {
+  redrawHz: 30,
+  staggerMs: 60,
+} as const;
+
+/** What the last `update` spent on entrances — the on-device cost readout. */
+export interface EntranceStats {
+  /** Marker redraws (canvas draws + texture uploads) in the last update. */
+  redraws: number;
+  /**
+   * Wall-clock milliseconds those redraws took (0 where `performance` is
+   * absent). `performance.now()` is clamped to 100 µs in a page that is not
+   * cross-origin isolated, and a desktop redraw costs ~0.04 ms, so this
+   * reads 0.00 or 0.10 on a desktop — the number is meaningful on a headset
+   * (0.3-1.0 ms estimated), which is what it exists for.
+   */
+  drawMs: number;
+  /** Targets whose entrance was still animating after the last update. */
+  animating: number;
+  /**
+   * The costliest entrance's ACCUMULATED draw milliseconds since it began —
+   * the sum of ~27 redraws, so it clears the browser clock's 100 µs floor
+   * where a single frame's `drawMs` does not (owner decision, 2026-09-06).
+   * Reset when that target's entrance restarts; holds its last value once
+   * settled.
+   */
+  entranceMs: number;
+  /** The costliest single redraw of that entrance, in milliseconds. */
+  peakDrawMs: number;
+}
+
+/** The all-zero readout: without the option, before the first update, after dispose. */
+const NO_ENTRANCE_STATS: EntranceStats = Object.freeze({
+  redraws: 0,
+  drawMs: 0,
+  animating: 0,
+  entranceMs: 0,
+  peakDrawMs: 0,
+});
 
 export interface WayfindingHudOptions {
   /**
@@ -109,6 +168,18 @@ export interface WayfindingHudOptions {
   /** Uniform scale multiplier for distance labels. Default 1.0. */
   labelScale?: number;
   /**
+   * Tint of the PROCEDURAL cone and ring. Default: the design system's accent
+   * (`--accent` in design.css, `#f2971f`); an app that vendors the sheet can
+   * pass the live token so the WebGL indicators follow a re-tuned accent.
+   * Inert in image mode: sprites are tinted white so the texture's own
+   * colours show. Any `THREE.ColorRepresentation` (hex number, CSS string,
+   * `THREE.Color`); the SHAPE is validated at construction because
+   * `THREE.Color` reads an object, a boolean or `null` as black without a
+   * word. A string's content is not: a malformed CSS colour reaches
+   * `THREE.Color`, which warns on the console and keeps its default.
+   */
+  indicatorColor?: THREE.ColorRepresentation;
+  /**
    * Optional custom texture (or URL) for the directional arrow indicator;
    * a procedural cone is used when omitted. The asset must point UPWARD
    * (12 o'clock) and be centered — the rotation logic assumes it.
@@ -120,6 +191,12 @@ export interface WayfindingHudOptions {
    * a procedural ring is used when omitted. Same ownership rule as
    * `arrowSprite`. */
   circleSprite?: THREE.Texture | string;
+  /**
+   * Opt-in build-up of the circle indicator; see {@link CircleEntranceOptions}.
+   * Mutually exclusive with `circleSprite`. Absent (the default): the circle
+   * is the procedural ring or `circleSprite`, exactly as before.
+   */
+  circleEntrance?: CircleEntranceOptions;
   /**
    * When `true` (default) the HUD self-registers with the framework frame
    * loop and is ticked by the WebXR session. Set `false` for hosts that own
@@ -136,6 +213,13 @@ export const DEFAULT_WAYFINDING_HUD = {
   hudDistance: 2.5,
   indicatorScale: 1.0,
   labelScale: 1.0,
+  /**
+   * The design system's `--accent`. A literal because a library cannot read a
+   * consumer's stylesheet; `tests/repo-config/design-accent-copies.test.js`
+   * holds it to the token (owner taste round 2026-09-04, replacing the
+   * prototype's red 0xff3b30).
+   */
+  indicatorColor: '#f2971f',
 } as const;
 
 export interface WayfindingHud {
@@ -145,12 +229,23 @@ export interface WayfindingHud {
    * No-op after dispose().
    */
   update(dt: number): void;
+  /**
+   * What the last `update` spent on `circleEntrance` redraws. All zeros
+   * without the option, before the first update, and after dispose.
+   */
+  entranceStats(): EntranceStats;
   /** Detach and release everything. Idempotent; also runs on session end. */
   dispose(): void;
 }
 
-/** Indicator tint used by the procedural cone/ring fallbacks. */
-const HUD_COLOR = 0xff3b30;
+/**
+ * The procedural ring, in HUD-plane units before `indicatorScale`. The outer
+ * radius is what the placement and the demo's pixel e2e were sized against
+ * and stays; the width is a third of the prototype's 0.04 (owner taste round
+ * 2026-09-04: "a thinner ring, a third as thick, in the accent").
+ */
+const RING_OUTER_RADIUS = 0.12;
+const RING_WIDTH = 0.04 / 3;
 /**
  * Damping rate for the circle's snap-then-damp smoothing, consumed as
  * `clampedAlpha(CIRCLE_DAMPING_RATE, dt)` (lerp-utils idiom) so the damping
@@ -203,6 +298,88 @@ function validateHudDeadband(distanceMin: number, distanceMax: number): void {
 }
 
 /**
+ * `THREE.Color` accepts a hex number, a CSS colour string or a Color; anything
+ * else it silently reads as black, which over dark ground is a HUD nobody
+ * can see and no error anywhere.
+ */
+function validateIndicatorColor(value: unknown): void {
+  const ok =
+    (typeof value === 'number' && Number.isFinite(value)) ||
+    typeof value === 'string' ||
+    (typeof value === 'object' &&
+      value !== null &&
+      (value as Partial<THREE.Color>).isColor === true);
+  if (!ok) {
+    throw new TypeError(
+      `createWayfindingHud: indicatorColor must be a hex number, a CSS colour string or a THREE.Color, got ${String(value)}`
+    );
+  }
+}
+
+function assertColourOption(name: string, value: unknown): void {
+  if (typeof value !== 'string' || value.trim() === '') {
+    throw new TypeError(
+      `createWayfindingHud: circleEntrance.${name} must be a non-empty CSS colour string, got ${JSON.stringify(value)}`
+    );
+  }
+}
+
+/**
+ * The entrance option is validated like every other option, and to the same
+ * standard: a `redrawHz` of 0 would divide to an infinite interval (never
+ * redraw) and a negative one would redraw every frame on the device the cap
+ * exists to protect; an empty colour paints nothing without a word.
+ */
+function validateCircleEntrance(
+  entrance: CircleEntranceOptions,
+  circleSprite: WayfindingHudOptions['circleSprite']
+): void {
+  if (circleSprite !== undefined) {
+    throw new TypeError(
+      'createWayfindingHud: circleEntrance and circleSprite are mutually exclusive — the entrance draws its own circle texture'
+    );
+  }
+  assertColourOption('ink', entrance.ink);
+  assertColourOption('accent', entrance.accent);
+  if (entrance.halo !== undefined) assertColourOption('halo', entrance.halo);
+  // `=== undefined`, not `??`, at every OPTION site (PR #432 review): with
+  // `??` an explicit null was replaced by the default before validation saw
+  // it, so a JS host passing null got the default for the five numeric
+  // options while a null colour threw. The resolve sites below keep `??` -
+  // they run only after this function passed, where null is impossible.
+  assertPositiveFiniteOption(
+    'circleEntrance.redrawHz',
+    entrance.redrawHz === undefined
+      ? DEFAULT_CIRCLE_ENTRANCE.redrawHz
+      : entrance.redrawHz
+  );
+  // The stagger is an OFFSET: 0 ("all spawns start together") is its
+  // natural setting for a single target or a deterministic replay scene,
+  // so unlike the cap it is non-negative rather than positive (PR #423).
+  const staggerMs =
+    entrance.staggerMs === undefined
+      ? DEFAULT_CIRCLE_ENTRANCE.staggerMs
+      : entrance.staggerMs;
+  if (
+    typeof staggerMs !== 'number' ||
+    !Number.isFinite(staggerMs) ||
+    staggerMs < 0
+  ) {
+    throw new RangeError(
+      `createWayfindingHud: circleEntrance.staggerMs must be a non-negative finite number, got ${staggerMs}`
+    );
+  }
+  if (
+    entrance.reducedMotion !== undefined &&
+    typeof entrance.reducedMotion !== 'boolean'
+  ) {
+    throw new TypeError(
+      `createWayfindingHud: circleEntrance.reducedMotion must be a boolean, got ${String(entrance.reducedMotion)}`
+    );
+  }
+}
+
+/**
  * Validate a {@link WayfindingHudOptions} object. Throws `TypeError` /
  * `RangeError` on malformed input.
  */
@@ -211,17 +388,32 @@ export function validateWayfindingHudOptions(
 ): void {
   validateHudRefs(options);
   validateHudDeadband(options.distanceMin, options.distanceMax);
+  if (options.circleEntrance !== undefined) {
+    validateCircleEntrance(options.circleEntrance, options.circleSprite);
+  }
+  // `=== undefined`, not `??`: an explicit null must be rejected, not defaulted.
+  validateIndicatorColor(
+    options.indicatorColor === undefined
+      ? DEFAULT_WAYFINDING_HUD.indicatorColor
+      : options.indicatorColor
+  );
   assertPositiveFiniteOption(
     'hudDistance',
-    options.hudDistance ?? DEFAULT_WAYFINDING_HUD.hudDistance
+    options.hudDistance === undefined
+      ? DEFAULT_WAYFINDING_HUD.hudDistance
+      : options.hudDistance
   );
   assertPositiveFiniteOption(
     'indicatorScale',
-    options.indicatorScale ?? DEFAULT_WAYFINDING_HUD.indicatorScale
+    options.indicatorScale === undefined
+      ? DEFAULT_WAYFINDING_HUD.indicatorScale
+      : options.indicatorScale
   );
   assertPositiveFiniteOption(
     'labelScale',
-    options.labelScale ?? DEFAULT_WAYFINDING_HUD.labelScale
+    options.labelScale === undefined
+      ? DEFAULT_WAYFINDING_HUD.labelScale
+      : options.labelScale
   );
 }
 
@@ -236,9 +428,57 @@ function resolveTexture(
 ): ResolvedTexture | null {
   if (source === undefined) return null;
   if (typeof source === 'string') {
-    return { texture: new THREE.TextureLoader().load(source), owned: true };
+    const texture = new THREE.TextureLoader().load(source);
+    // An image file's pixels are sRGB. Untagged, three.js treats them as
+    // linear and renders them lighter than authored — noticeable once the
+    // sprite carries the design accent rather than a single flat colour.
+    // A caller-passed Texture keeps whatever colour space the caller chose.
+    texture.colorSpace = THREE.SRGBColorSpace;
+    return { texture, owned: true };
   }
   return { texture: source, owned: false };
+}
+
+/** The per-target entrance clock, present only with `circleEntrance`. */
+interface EntranceState {
+  /**
+   * Created on the FIRST entrance, not with the target: a marker is two
+   * 256 px canvases (~512 KB) and `createWayfindingHud` documents no
+   * target-count bound, so a consumer with 50 waypoints would otherwise pay
+   * ~25 MB of headset canvas for markers mostly never drawn (PR #425
+   * review). Null until then; the circle sprite's material gets the texture
+   * at the same moment, before the sprite is first presented.
+   */
+  marker: DiamondMarkerTexture | null;
+  /** Milliseconds since the entrance began; negative while staggered. */
+  elapsedMs: number;
+  /** `elapsedMs` at the last redraw — the cap compares against it. */
+  lastRedrawMs: number;
+  /** True while the timeline still changes; false once settled. */
+  animating: boolean;
+  /** Started in this update: the t = 0 frame is drawn, not advanced. */
+  fresh: boolean;
+  /**
+   * Whether this target's entrance has EVER run. A target whose first
+   * placement is an edge arrow (in range, off-screen) reaches its first
+   * circle with `previous === 'arrow'`; without this flag that first showing
+   * would never start the entrance, and nothing else draws the marker
+   * (milestone review, 2026-09-06).
+   */
+  started: boolean;
+  /**
+   * Set when the target goes hidden (out through the distance gate, or
+   * arrived): the entrance is abandoned and replays from t = 0 on the next
+   * circle, whichever placement the return lands on first. The previous
+   * state alone cannot see that: a target coming back while off-screen goes
+   * hidden → arrow → circle — the ordinary walk-up — and at that circle
+   * frame `previous === 'arrow'` (PR #425 review).
+   */
+  replayPending: boolean;
+  /** Draw milliseconds accumulated since this entrance began. */
+  drawMsTotal: number;
+  /** The costliest single redraw since this entrance began. */
+  peakDrawMs: number;
 }
 
 interface TargetState {
@@ -249,54 +489,47 @@ interface TargetState {
   circle: THREE.Mesh | THREE.Sprite;
   label: TextSprite;
   smoothedCirclePos: THREE.Vector3;
+  entrance: EntranceState | null;
 }
 
-/** A {@link WayfindingTarget} that passed the boundary validation, with every
- * per-target option resolved against the HUD-level defaults. */
-interface ResolvedTarget {
-  key: string | number;
-  position: THREE.Vector3;
-  distanceMin: number;
-  distanceMax: number;
-  showArrowWhenInactive: boolean;
-  showLabelWhenInactive: boolean;
-}
-
-function isVector3(value: unknown): value is THREE.Vector3 {
+/** The OS setting, read once; `false` where `matchMedia` is absent (jsdom, workers). */
+function prefersReducedMotion(): boolean {
   return (
-    typeof value === 'object' &&
-    value !== null &&
-    (value as THREE.Vector3).isVector3 === true
+    typeof matchMedia === 'function' &&
+    matchMedia('(prefers-reduced-motion: reduce)').matches
   );
 }
 
-/** Same `0 ≤ min ≤ max` (finite) rule the placement seam enforces per call. */
-function isValidDeadband(min: unknown, max: unknown): boolean {
-  return (
-    typeof min === 'number' &&
-    Number.isFinite(min) &&
-    min >= 0 &&
-    typeof max === 'number' &&
-    Number.isFinite(max) &&
-    max >= min
-  );
+/** The validated `circleEntrance` option with its defaults applied. */
+interface ResolvedEntranceOptions {
+  ink: string;
+  accent: string;
+  halo?: string;
+  /** `1000 / redrawHz`: the least timeline time between two redraws. */
+  redrawIntervalMs: number;
+  staggerMs: number;
+  reducedMotion: boolean;
 }
 
-/** Shape triage for one raw getTargets() element; null = shape is fine. */
-function checkTargetShape(raw: WayfindingTarget): 'legacy' | 'invalid' | null {
-  if (isVector3(raw)) return 'legacy';
-  if (typeof raw !== 'object' || raw === null) return 'invalid';
-  if (!isVector3(raw.position)) return 'invalid';
-  if (raw.id !== undefined && typeof raw.id !== 'string') return 'invalid';
-  return null;
+/**
+ * Resolve the entrance option once at creation: colours, the redraw
+ * interval, the stagger, and the reduced-motion read (the OS setting unless
+ * the option forces it). `null` without the option.
+ */
+function resolveEntranceOptions(
+  entrance: CircleEntranceOptions | undefined
+): ResolvedEntranceOptions | null {
+  if (!entrance) return null;
+  return {
+    ink: entrance.ink,
+    accent: entrance.accent,
+    ...(entrance.halo !== undefined ? { halo: entrance.halo } : {}),
+    redrawIntervalMs:
+      1000 / (entrance.redrawHz ?? DEFAULT_CIRCLE_ENTRANCE.redrawHz),
+    staggerMs: entrance.staggerMs ?? DEFAULT_CIRCLE_ENTRANCE.staggerMs,
+    reducedMotion: entrance.reducedMotion ?? prefersReducedMotion(),
+  };
 }
-
-const SHAPE_ISSUE_MESSAGES = {
-  legacy:
-    'getTargets() returned a plain THREE.Vector3 at index %i — the API takes WayfindingTarget objects now; wrap it as { position: vector }. Hiding it.',
-  invalid:
-    'getTargets() element at index %i is not a WayfindingTarget ({ position: THREE.Vector3, id?: string, … }). Hiding it.',
-} as const;
 
 /**
  * Create the wayfinding HUD and start driving it via the frame loop.
@@ -315,6 +548,8 @@ export function createWayfindingHud(
   const indicatorScale =
     options.indicatorScale ?? DEFAULT_WAYFINDING_HUD.indicatorScale;
   const labelScale = options.labelScale ?? DEFAULT_WAYFINDING_HUD.labelScale;
+  const indicatorColor =
+    options.indicatorColor ?? DEFAULT_WAYFINDING_HUD.indicatorColor;
 
   const arrowTexture = resolveTexture(options.arrowSprite);
   const circleTexture = resolveTexture(options.circleSprite);
@@ -328,25 +563,14 @@ export function createWayfindingHud(
   // Per-target state keyed by `id ?? index` (2026-07-20 plan) — replaces the
   // earlier grow/shrink array, so state follows ids through reorders.
   const states = new Map<string | number, TargetState>();
-  let warnedBadTargets = false;
 
-  /**
-   * One-shot bookkeeping for consumer bugs surfaced at the readTargets
-   * boundary: `<reason>:<key>` → already logged. Entries are cleared when
-   * the offending target heals, so a later regression logs again instead of
-   * staying silent forever.
-   */
-  const loggedIssues = new Set<string>();
-
-  function logIssueOnce(issueKey: string, message: string): void {
-    if (loggedIssues.has(issueKey)) return;
-    loggedIssues.add(issueKey);
-    log.error(`createWayfindingHud: ${message}`);
-  }
+  // Boundary triage of getTargets() results: hide-and-log-once, never a
+  // per-frame throw. Pure, tested directly in wayfinding-targets.test.ts.
+  const targets = createTargetResolver({ distanceMin, distanceMax });
 
   function getHudMaterial(): THREE.MeshBasicMaterial {
     hudMaterial ??= new THREE.MeshBasicMaterial({
-      color: HUD_COLOR,
+      color: indicatorColor,
       depthTest: false,
       depthWrite: false,
       transparent: true,
@@ -354,7 +578,7 @@ export function createWayfindingHud(
     return hudMaterial;
   }
 
-  function makeIndicatorSprite(texture: THREE.Texture): THREE.Sprite {
+  function makeIndicatorSprite(texture: THREE.Texture | null): THREE.Sprite {
     const material = new THREE.SpriteMaterial({
       map: texture,
       color: 0xffffff,
@@ -385,11 +609,39 @@ export function createWayfindingHud(
     return mesh;
   }
 
-  function makeCircle(): THREE.Mesh | THREE.Sprite {
+  // The entrance option, resolved once (colours, cap, stagger, the
+  // reduced-motion read); null without the option.
+  const entranceOptions = resolveEntranceOptions(options.circleEntrance);
+  /** Spawns started in the current update — the stagger multiplier. */
+  let spawnsThisUpdate = 0;
+  let stats: EntranceStats = { ...NO_ENTRANCE_STATS };
+
+  function makeEntrance(): EntranceState | null {
+    if (!entranceOptions) return null;
+    return {
+      marker: null,
+      elapsedMs: 0,
+      lastRedrawMs: Number.NEGATIVE_INFINITY,
+      animating: false,
+      fresh: false,
+      started: false,
+      replayPending: false,
+      drawMsTotal: 0,
+      peakDrawMs: 0,
+    };
+  }
+
+  function makeCircle(
+    entrance: EntranceState | null
+  ): THREE.Mesh | THREE.Sprite {
+    // The entrance sprite starts without a map: its marker texture is
+    // attached by the first `startEntrance`, in the same update that first
+    // makes it visible (see `EntranceState.marker`).
+    if (entrance) return makeIndicatorSprite(null);
     if (circleTexture) return makeIndicatorSprite(circleTexture.texture);
     circleGeometry ??= new THREE.RingGeometry(
-      0.08 * indicatorScale,
-      0.12 * indicatorScale,
+      (RING_OUTER_RADIUS - RING_WIDTH) * indicatorScale,
+      RING_OUTER_RADIUS * indicatorScale,
       32
     );
     const mesh = new THREE.Mesh(circleGeometry, getHudMaterial());
@@ -418,7 +670,8 @@ export function createWayfindingHud(
   function makeState(): TargetState {
     const arrow = makeArrow();
     arrow.name = 'wayfinding-arrow';
-    const circle = makeCircle();
+    const entrance = makeEntrance();
+    const circle = makeCircle(entrance);
     circle.name = 'wayfinding-circle';
     const label = makeLabel();
     label.sprite.name = 'wayfinding-label';
@@ -433,6 +686,7 @@ export function createWayfindingHud(
       circle,
       label,
       smoothedCirclePos: new THREE.Vector3(),
+      entrance,
     };
   }
 
@@ -450,6 +704,9 @@ export function createWayfindingHud(
   function disposeState(state: TargetState): void {
     disposeIndicator(state.arrow);
     disposeIndicator(state.circle);
+    // The marker texture is per target (the sprite material above only
+    // releases itself); the shared procedural resources stay.
+    state.entrance?.marker?.dispose();
     camera.remove(state.label.sprite);
     state.label.dispose();
   }
@@ -486,6 +743,25 @@ export function createWayfindingHud(
   ): void {
     state.arrow.visible = false;
     state.circle.visible = true;
+
+    // DEC-E3: the entrance starts on APPEARANCE (no previous state) and on
+    // a return through the distance gate — whichever placement the return
+    // lands on first: hidden → circle, or hidden → arrow → circle when the
+    // target comes back off-screen, the ordinary walk-up (the `replayPending`
+    // flag, set when the target went hidden; PR #425 review) — never on a
+    // head turn alone ('arrow' → circle, the viewport hysteresis), which
+    // would rebuild the marker every time the wearer looks away and back.
+    // The FIRST circle a target ever shows is an appearance too, whatever
+    // preceded it: a target spawned in range but off-screen arrives here with
+    // `previous === 'arrow'` and would otherwise never get its marker drawn.
+    if (
+      state.entrance &&
+      (previous === null ||
+        state.entrance.replayPending ||
+        !state.entrance.started)
+    ) {
+      startEntrance(state, state.entrance);
+    }
 
     // Snap to the placement on the frame the circle becomes visible;
     // damping only applies BETWEEN circle frames (smoothedCirclePos would
@@ -567,6 +843,7 @@ export function createWayfindingHud(
     state.currentState = placement.state;
 
     if (placement.state === 'hidden') {
+      if (state.entrance) abandonEntrance(state.entrance);
       if (placement.inactiveArrow) {
         showInactiveArrow(
           state,
@@ -591,119 +868,150 @@ export function createWayfindingHud(
     showArrow(state, placement);
   }
 
-  /** Defensive boundary: a getter returning garbage counts as "no targets"
-   * (logged once) so the frame loop and scene state stay consistent. */
-  function readTargets(): WayfindingTarget[] {
-    const targets = getTargets();
-    if (Array.isArray(targets)) return targets;
-    if (!warnedBadTargets) {
-      warnedBadTargets = true;
-      log.error(
-        'getTargets() did not return an array; treating as empty target list',
-        targets
-      );
-    }
-    return [];
+  /**
+   * Hidden ABANDONS the entrance: it never resumes from where it stopped —
+   * the distance gate restarts it from t = 0 — so it is not animating
+   * meanwhile. A readout that kept counting it pinned "1 animating" to the
+   * demo's status line for as long as the wearer stood at the target (PR
+   * #425 / #426 reviews). The arrow pause is different: it resumes, and
+   * stays counted.
+   */
+  function abandonEntrance(entrance: EntranceState): void {
+    entrance.replayPending = true;
+    entrance.animating = false;
   }
 
-  /** Validate the per-target deadband with the seam's `0 ≤ min ≤ max` rule.
-   * Returns null (target hidden, one log) instead of throwing — the getter
-   * is polled per frame, so a throw would spam the frame loop and kill
-   * manual-update hosts. */
-  function resolveDeadband(
-    target: WayfindingTarget,
-    key: string | number
-  ): { min: number; max: number } | null {
-    const min = target.distanceMin ?? distanceMin;
-    const max = target.distanceMax ?? distanceMax;
-    const issueKey = `deadband:${String(key)}`;
-    if (!isValidDeadband(min, max)) {
-      logIssueOnce(
-        issueKey,
-        `target "${String(key)}" must satisfy 0 ≤ distanceMin ≤ distanceMax (finite), got distanceMin=${String(min)}, distanceMax=${String(max)}. Hiding it.`
-      );
-      return null;
-    }
-    loggedIssues.delete(issueKey);
-    return { min, max };
-  }
-
-  /** Boundary triage for one raw element → ResolvedTarget, or null when the
-   * element must be hidden (shape/duplicate/deadband issue, logged once). */
-  function resolveTarget(
-    raw: WayfindingTarget,
-    index: number,
-    seenIds: Set<string>,
-    duplicateIds: Set<string>
-  ): ResolvedTarget | null {
-    const shapeIssue = checkTargetShape(raw);
-    if (shapeIssue) {
-      logIssueOnce(
-        `${shapeIssue}:${index}`,
-        SHAPE_ISSUE_MESSAGES[shapeIssue].replace('%i', String(index))
-      );
-      return null;
-    }
-    loggedIssues.delete(`legacy:${index}`);
-    loggedIssues.delete(`invalid:${index}`);
-
-    if (raw.id !== undefined) {
-      if (seenIds.has(raw.id)) {
-        duplicateIds.add(raw.id);
-        logIssueOnce(
-          `duplicate:${raw.id}`,
-          `duplicate target id "${raw.id}" in one getTargets() result — only the first occurrence is shown.`
-        );
-        return null;
-      }
-      seenIds.add(raw.id);
-    }
-
-    const key = raw.id ?? index;
-    const deadband = resolveDeadband(raw, key);
-    if (!deadband) return null;
-    return {
-      key,
-      position: raw.position,
-      distanceMin: deadband.min,
-      distanceMax: deadband.max,
-      showArrowWhenInactive: raw.showArrowWhenInactive ?? false,
-      showLabelWhenInactive: raw.showLabelWhenInactive ?? true,
-    };
-  }
-
-  /** A duplicate-id log entry is keyed by id, not index, so it is cleared
-   * only once the duplication actually disappears from the result (clearing
-   * it while the duplicate persists would re-log every frame). */
-  function clearHealedDuplicates(duplicateIds: Set<string>): void {
-    for (const issue of loggedIssues) {
-      if (
-        issue.startsWith('duplicate:') &&
-        !duplicateIds.has(issue.slice('duplicate:'.length))
-      ) {
-        loggedIssues.delete(issue);
-      }
-    }
-  }
-
-  function resolveTargets(raw: readonly WayfindingTarget[]): ResolvedTarget[] {
-    const seenIds = new Set<string>();
-    const duplicateIds = new Set<string>();
-    const resolved: ResolvedTarget[] = [];
-    raw.forEach((target, index) => {
-      const result = resolveTarget(target, index, seenIds, duplicateIds);
-      if (result) resolved.push(result);
+  /**
+   * The per-target marker, made on demand: the texture is created and
+   * attached to the circle sprite's material the first time this target's
+   * entrance starts (see `EntranceState.marker`).
+   */
+  function attachMarker(
+    state: TargetState,
+    opts: ResolvedEntranceOptions
+  ): DiamondMarkerTexture {
+    const marker = createDiamondMarkerTexture({
+      ink: opts.ink,
+      accent: opts.accent,
+      ...(opts.halo !== undefined ? { halo: opts.halo } : {}),
     });
-    clearHealedDuplicates(duplicateIds);
-    return resolved;
+    const material = (state.circle as THREE.Sprite).material;
+    material.map = marker.texture;
+    material.needsUpdate = true;
+    return marker;
+  }
+
+  /** Begin (or restart) a target's entrance: the t = 0 frame is drawn now. */
+  function startEntrance(state: TargetState, entrance: EntranceState): void {
+    if (!entrance.marker && entranceOptions) {
+      entrance.marker = attachMarker(state, entranceOptions);
+    }
+    const stagger = (entranceOptions?.staggerMs ?? 0) * spawnsThisUpdate;
+    spawnsThisUpdate += 1;
+    entrance.elapsedMs = -stagger;
+    entrance.lastRedrawMs = entrance.elapsedMs;
+    entrance.animating = true;
+    entrance.fresh = true;
+    entrance.started = true;
+    entrance.replayPending = false;
+    entrance.drawMsTotal = 0;
+    entrance.peakDrawMs = 0;
+    redraw(entrance, entranceState(entrance));
+  }
+
+  function entranceState(entrance: EntranceState): DiamondEntranceState {
+    // One decision, taken by the seam: reduced motion is its option, not a
+    // second branch here (milestone review, 2026-09-06).
+    return computeDiamondEntrance(entrance.elapsedMs, {
+      reducedMotion: entranceOptions?.reducedMotion === true,
+    });
+  }
+
+  function redraw(entrance: EntranceState, state: DiamondEntranceState): void {
+    // Only ever reached after `startEntrance`, which attaches the marker;
+    // the guard keeps a future caller from drawing into nothing.
+    if (!entrance.marker) return;
+    if (entrance.marker.apply(state)) {
+      const drawMs = entrance.marker.lastDrawMs;
+      stats.redraws += 1;
+      stats.drawMs += drawMs;
+      entrance.drawMsTotal += drawMs;
+      if (drawMs > entrance.peakDrawMs) entrance.peakDrawMs = drawMs;
+    }
+    entrance.lastRedrawMs = entrance.elapsedMs;
+    if (state.settled) entrance.animating = false;
+  }
+
+  /**
+   * The per-frame clock of every animating entrance. `dt` is SECONDS
+   * (`ar/frame-loop.ts`), the timeline milliseconds. Redraws are capped:
+   * one per `redrawIntervalMs` of elapsed time, plus the settling frame; a
+   * fresh entrance drew its t = 0 frame in this update and is not advanced.
+   */
+  function advanceEntrances(dt: number): void {
+    if (!entranceOptions) return;
+    // A non-finite dt (a host's broken clock) must not become a per-frame
+    // throw: the pure seam rejects a non-finite time, so the ADVANCE is
+    // skipped and the entrance waits for a real frame — while the readout
+    // still reports it as animating, so a broken clock never reads as a
+    // quiet one (PR #423 review). A negative dt (a clock stepping back)
+    // must not rewind the timeline either: an entrance that kept being
+    // rewound would animate forever (PR #422 CodeRabbit review); it counts
+    // as a frame of zero length.
+    const dtMs = Number.isFinite(dt) ? Math.max(0, dt) * 1000 : null;
+    for (const state of states.values()) {
+      const entrance = state.entrance;
+      if (!entrance) continue;
+      // PAUSED while the circle is not shown: a frame drawn then is never
+      // presented — the marker comes back either as the same sprite (arrow →
+      // circle, no restart) or through the distance gate, which restarts
+      // from t = 0 (PR #424 review). The readout counts only entrances that
+      // can redraw NEXT frame: a paused one is not doing the work the number
+      // exists to measure on the headset (owner decision 2026-09-07, PR #430
+      // review) — its accumulated total and peak stay readable meanwhile.
+      if (entrance.animating && dtMs !== null && state.circle.visible) {
+        advanceOne(entrance, dtMs);
+      }
+      if (entrance.animating && state.circle.visible) stats.animating += 1;
+      recordCostliest(entrance);
+    }
+  }
+
+  /** One animating entrance's tick: the fresh frame is drawn, not advanced. */
+  function advanceOne(entrance: EntranceState, dtMs: number): void {
+    if (entrance.fresh) {
+      entrance.fresh = false;
+      return;
+    }
+    const tolerance = 1e-6; // 3 × (1/90 s) is 33.333… ms against a 33.333… ms interval
+    entrance.elapsedMs += dtMs;
+    const next = entranceState(entrance);
+    const due =
+      entrance.elapsedMs - entrance.lastRedrawMs >=
+      (entranceOptions?.redrawIntervalMs ?? Number.POSITIVE_INFINITY) -
+        tolerance;
+    if (due || next.settled) redraw(entrance, next);
+  }
+
+  /**
+   * The costliest entrance's totals, animating or settled: what the owner
+   * reads on the headset after walking one target back in.
+   */
+  function recordCostliest(entrance: EntranceState): void {
+    if (!entrance.started || entrance.drawMsTotal <= stats.entranceMs) return;
+    stats.entranceMs = entrance.drawMsTotal;
+    stats.peakDrawMs = entrance.peakDrawMs;
   }
 
   function update(dt: number): void {
-    const resolved = resolveTargets(readTargets());
+    spawnsThisUpdate = 0;
+    stats = { ...NO_ENTRANCE_STATS };
+    const resolved = targets.resolve(getTargets());
     syncTargetStates(resolved);
     for (const target of resolved) {
       updateTarget(target, states.get(target.key) as TargetState, dt);
     }
+    advanceEntrances(dt);
   }
 
   /** Release the target-shared procedural resources and any owned textures. */
@@ -728,9 +1036,13 @@ export function createWayfindingHud(
       if (disposed) return;
       update(dt);
     },
+    entranceStats(): EntranceStats {
+      return { ...stats };
+    },
     dispose(): void {
       if (disposed) return;
       disposed = true;
+      stats = { ...NO_ENTRANCE_STATS };
       unregister?.();
       for (const state of states.values()) {
         disposeState(state);

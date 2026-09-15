@@ -13,7 +13,9 @@ to a local cache mid-session without whatever reads through it (e.g. a zip.js
 - `interface ByteSource { readonly size: number; read(offset, length): Promise<Uint8Array> }`
 - `class SwitchableByteSource implements ByteSource`
   - `constructor(initial: ByteSource)`
-  - `switchTo(next: ByteSource): void` — swaps the backing source.
+  - `switchTo(next: ByteSource): boolean` — swaps the backing source; reports
+    whether the swap took effect (`false` on size mismatch or duplicate — a
+    warm-download caller must not persist bytes whose swap was refused).
 
 ## Invariants & assumptions
 
@@ -24,7 +26,7 @@ to a local cache mid-session without whatever reads through it (e.g. a zip.js
   mismatched bytes (redirect page, truncated body) would silently corrupt
   every later read.
 - A read captures its source **at call entry**: an in-flight read finishes
-  from the source it started on; only reads issued *after* `switchTo` see the
+  from the source it started on; only reads issued _after_ `switchTo` see the
   new source.
 
 ## Examples

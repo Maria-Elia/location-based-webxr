@@ -1,141 +1,120 @@
+/**
+ * Why this test matters: the packer is the ONE store-mode writer behind the
+ * starter zip, the rebuild and the coverage embed. A range-reading consumer
+ * slices entries out as raw bytes, so a single DEFLATE'd entry would read
+ * back as garbage on a device. STORE mode is therefore verified against a
+ * hand-rolled central-directory parser deliberately independent of
+ * `@zip.js/zip.js` (a shared misreading of the format would cancel out), a
+ * discipline kept from community PR #321's test. The error paths are the
+ * PR review's confirmed gaps: an unsafe path anywhere, an `undefined`
+ * payload (what `JSON.stringify` returns for an unserialisable value), and
+ * a writer failure that must not surface as a raw library error.
+ */
+
 import {
-  ZipReader,
   BlobReader,
   TextWriter,
+  Uint8ArrayWriter,
+  ZipReader,
   type FileEntry,
 } from '@zip.js/zip.js';
 import { describe, expect, it } from 'vitest';
 
-import { packFilesAsZip, ZipPackagingError } from './pack-files-as-zip.js';
+import { packFilesAsZip, ZipPackagingError } from './pack-files-as-zip';
+import { readStoredCentralDirectory } from '../test-utils/zip-central-directory';
 
-const readAllEntries = async (blob: Blob) => {
+async function readAllEntries(blob: Blob): Promise<FileEntry[]> {
   const reader = new ZipReader(new BlobReader(blob));
   try {
-    return await reader.getEntries();
+    return (await reader.getEntries()).filter(
+      (e): e is FileEntry => !e.directory
+    );
   } finally {
     await reader.close();
   }
-};
-
-// ── ZIP byte readers ─────────────────────────────────────────────────────────
-// Deliberately independent of @zip.js/zip.js: if the library's own reader were
-// used to check the library's own writer, a shared misunderstanding of the
-// format would cancel out.
-
-const EOCD_SIGNATURE = 0x06054b50;
-const CENTRAL_HEADER_SIGNATURE = 0x02014b50;
-const LOCAL_HEADER_SIGNATURE = 0x04034b50;
-const EOCD_MIN_SIZE = 22;
-const STORED = 0x0000;
-
-interface CentralEntry {
-  readonly name: string;
-  readonly method: number;
-  readonly compressedSize: number;
-  readonly uncompressedSize: number;
-  readonly localHeaderOffset: number;
 }
-
-const viewOf = (bytes: Uint8Array): DataView =>
-  new DataView(bytes.buffer as ArrayBuffer, bytes.byteOffset, bytes.byteLength);
-
-function findEocd(view: DataView): number {
-  for (let i = view.byteLength - EOCD_MIN_SIZE; i >= 0; i--) {
-    if (view.getUint32(i, true) === EOCD_SIGNATURE) return i;
-  }
-  throw new Error('not a ZIP: no EOCD record');
-}
-
-function readCentralDirectory(bytes: Uint8Array): CentralEntry[] {
-  const view = viewOf(bytes);
-  const eocd = findEocd(view);
-  const total = view.getUint16(eocd + 10, true);
-  let at = view.getUint32(eocd + 16, true);
-  const entries: CentralEntry[] = [];
-
-  for (let i = 0; i < total; i++) {
-    if (view.getUint32(at, true) !== CENTRAL_HEADER_SIGNATURE) {
-      throw new Error(`corrupt central directory at ${at}`);
-    }
-    const nameLength = view.getUint16(at + 28, true);
-    const extraLength = view.getUint16(at + 30, true);
-    const commentLength = view.getUint16(at + 32, true);
-    entries.push({
-      name: new TextDecoder().decode(
-        bytes.subarray(at + 46, at + 46 + nameLength)
-      ),
-      method: view.getUint16(at + 10, true),
-      compressedSize: view.getUint32(at + 20, true),
-      uncompressedSize: view.getUint32(at + 24, true),
-      localHeaderOffset: view.getUint32(at + 42, true),
-    });
-    at += 46 + nameLength + extraLength + commentLength;
-  }
-  return entries;
-}
-
-function readLocalMethod(bytes: Uint8Array, offset: number): number {
-  const view = viewOf(bytes);
-  if (view.getUint32(offset, true) !== LOCAL_HEADER_SIGNATURE) {
-    throw new Error(`no local header at ${offset}`);
-  }
-  return view.getUint16(offset + 8, true);
-}
-
-const bytesOf = async (blob: Blob): Promise<Uint8Array> =>
-  new Uint8Array(await blob.arrayBuffer());
 
 describe('packFilesAsZip', () => {
-  it('returns a ZIP blob containing the manifest and every declared file', async () => {
-    const blob = await packFilesAsZip(
-      { path: 'tour.json', json: { name: 'Harbour Walk' } },
-      [{ path: 'assets/a.png', file: new Blob(['a']) }]
-    );
+  it('returns an application/zip blob containing every declared entry, text and binary', async () => {
+    const bytes = new Uint8Array([1, 2, 3, 250]);
+    const blob = await packFilesAsZip([
+      { path: 'tour.json', data: JSON.stringify({ name: 'Harbour Walk' }) },
+      { path: 'assets/a.png', data: new Blob([bytes]) },
+      { path: 'assets/b.bin', data: bytes },
+    ]);
 
     expect(blob.type).toBe('application/zip');
     const entries = await readAllEntries(blob);
     expect(entries.map((e) => e.filename).sort()).toEqual([
       'assets/a.png',
+      'assets/b.bin',
       'tour.json',
     ]);
-
-    const manifestEntry = entries.find(
-      (e): e is FileEntry => !e.directory && e.filename === 'tour.json'
-    )!;
-    const text = await manifestEntry.getData(new TextWriter());
-    expect(JSON.parse(text)).toEqual({ name: 'Harbour Walk' });
+    const manifest = entries.find((e) => e.filename === 'tour.json');
+    expect(JSON.parse(await manifest!.getData(new TextWriter()))).toEqual({
+      name: 'Harbour Walk',
+    });
+    const b = entries.find((e) => e.filename === 'assets/b.bin');
+    expect(await b!.getData(new Uint8ArrayWriter())).toEqual(bytes);
   });
 
   it('stores every entry uncompressed, in both the local header and the central directory', async () => {
-    const blob = await packFilesAsZip(
-      { path: 'tour.json', json: { name: 'Harbour Walk' } },
-      [{ path: 'assets/a.png', file: new Blob(['a']) }]
+    const blob = await packFilesAsZip([
+      { path: 'tour.json', data: '{"x":1}' },
+      { path: 'assets/a.png', data: new Blob(['aaaaaaaaaaaaaaaaaaaaaaaa']) },
+    ]);
+    const central = readStoredCentralDirectory(
+      new Uint8Array(await blob.arrayBuffer())
     );
-    const bytes = await bytesOf(blob);
-    const entries = readCentralDirectory(bytes);
-
-    expect(entries).toHaveLength(2);
-    for (const entry of entries) {
-      expect(entry.method).toBe(STORED);
+    expect(central.map((e) => e.name).sort()).toEqual([
+      'assets/a.png',
+      'tour.json',
+    ]);
+    for (const entry of central) {
+      expect(entry.stored).toBe(true);
       expect(entry.compressedSize).toBe(entry.uncompressedSize);
-      expect(readLocalMethod(bytes, entry.localHeaderOffset)).toBe(STORED);
     }
   });
 
-  it('rejects an entry path colliding with the manifest path', async () => {
-    await expect(
-      packFilesAsZip({ path: 'tour.json', json: {} }, [
-        { path: 'tour.json', file: new Blob(['a']) },
-      ])
-    ).rejects.toBeInstanceOf(ZipPackagingError);
+  it('packs an empty entry list into a valid, empty archive (the starter zip case)', async () => {
+    const blob = await packFilesAsZip([]);
+    expect(blob.size).toBeGreaterThan(0);
+    expect(await readAllEntries(blob)).toEqual([]);
   });
 
-  it('rejects duplicate entry paths instead of silently overwriting one', async () => {
+  it('rejects an unsafe or duplicate path BEFORE writing, as a ZipPackagingError', async () => {
     await expect(
-      packFilesAsZip({ path: 'tour.json', json: {} }, [
-        { path: 'assets/same.bin', file: new Blob(['a']) },
-        { path: 'assets/same.bin', file: new Blob(['b']) },
+      packFilesAsZip([{ path: '../evil.json', data: '{}' }])
+    ).rejects.toBeInstanceOf(ZipPackagingError);
+    await expect(
+      packFilesAsZip([
+        { path: 'assets/same.bin', data: 'a' },
+        { path: 'assets/same.bin', data: 'b' },
       ])
     ).rejects.toThrow(/assets\/same\.bin/);
+  });
+
+  it('rejects an undefined payload BEFORE writing - what JSON.stringify returns for an unserialisable value', async () => {
+    const data = JSON.stringify(undefined); // typed string, undefined at runtime
+    await expect(packFilesAsZip([{ path: 'tour.json', data }])).rejects.toThrow(
+      /tour\.json.*no writable data/
+    );
+  });
+
+  it('wraps a failure of the underlying writer in a ZipPackagingError', async () => {
+    // A data source whose stream throws mid-write: the packer must not leak
+    // the raw library error, nor resolve with a partial archive.
+    const broken = new Blob(['x']);
+    Object.defineProperty(broken, 'stream', {
+      value: () =>
+        new ReadableStream({
+          start(controller) {
+            controller.error(new Error('disk gone'));
+          },
+        }),
+    });
+    await expect(
+      packFilesAsZip([{ path: 'a.bin', data: broken }])
+    ).rejects.toBeInstanceOf(ZipPackagingError);
   });
 });

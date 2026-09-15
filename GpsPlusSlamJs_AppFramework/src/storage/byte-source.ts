@@ -16,7 +16,26 @@
 export interface ByteSource {
   /** Total archive size in bytes (fixed for the archive's lifetime). */
   readonly size: number;
-  /** Read `length` bytes starting at `offset`. */
+  /**
+   * Read `length` bytes starting at `offset`.
+   *
+   * ⚠️ **The two implementations DISAGREE past EOF, and this seam does not
+   * yet make them agree** (PR #383 review). A read where
+   * `offset + length > size` THROWS `StructuralReadError` in
+   * `RemoteRangeByteSource`, while `LocalCacheByteSource` returns a SHORT
+   * buffer, because `blob.slice` clamps silently. Since
+   * {@link SwitchableByteSource} swaps one for the other mid-session (warm
+   * download, range-ignore recovery), the same read can throw before the
+   * swap and succeed after it.
+   *
+   * Callers must therefore not rely on either behaviour today. Which one
+   * becomes the contract is an open decision - `open-remote-archive.ts`
+   * reasons as though clamping were it, which is part of why this is worth
+   * settling rather than picking here. See
+   * `../../../../gps-plus-slam/GpsPlusSlamJs_Docs/docs/2026-08-30-1120-byte-source-eof-contract-followup.md`
+   * (the two-root layout this repo is developed in; same convention as
+   * `detection-scheduler.ts`).
+   */
   read(offset: number, length: number): Promise<Uint8Array>;
 }
 
@@ -46,10 +65,15 @@ export class SwitchableByteSource implements ByteSource {
    * swap): every parsed zip offset is anchored to `this.size`, so mismatched
    * bytes (redirect page, truncated body) would silently corrupt every later
    * read.
+   *
+   * Returns whether the swap took effect. A caller that just warmed a local
+   * copy must know: `false` on a size mismatch means the downloaded bytes are
+   * WRONG for this archive and must not be persisted to a cache.
    */
-  switchTo(next: ByteSource): void {
-    if (this.#switched || next.size !== this.size) return;
+  switchTo(next: ByteSource): boolean {
+    if (this.#switched || next.size !== this.size) return false;
     this.#switched = true;
     this.#current = next;
+    return true;
   }
 }

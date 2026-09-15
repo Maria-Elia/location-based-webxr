@@ -618,10 +618,10 @@ const OPTION_BINDINGS: readonly OptionBinding[] = [
   },
   {
     kind: 'checkbox',
-    id: 'compass-robust-solver-comparison',
-    get: (o) => o.compassDebug.robustSolverComparison,
+    id: 'compass-consensus-solver-comparison',
+    get: (o) => o.compassDebug.consensusSolverComparison,
     set: (o, v) => {
-      o.compassDebug.robustSolverComparison = v;
+      o.compassDebug.consensusSolverComparison = v;
     },
   },
   {
@@ -656,6 +656,15 @@ const OPTION_BINDINGS: readonly OptionBinding[] = [
     set: (o, v) => {
       o.qr.enabled = v;
     },
+  },
+  {
+    kind: 'checkbox',
+    id: 'qr-use-levels',
+    get: (o) => o.qr.useLevels,
+    set: (o, v) => {
+      o.qr.useLevels = v;
+    },
+    enabledWhen: qrOn,
   },
   {
     kind: 'slider',

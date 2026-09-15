@@ -18,7 +18,23 @@
 export function parseContentRangeTotal(header: string | null): number | null {
   if (!header) return null;
   const m = /^bytes\s+(?:\d+-\d+|\*)\/(\d+)$/.exec(header.trim());
-  return m ? Number(m[1]) : null;
+  if (!m) return null;
+  // Beyond MAX_SAFE_INTEGER the double is imprecise — anchoring zip offsets to
+  // it would corrupt reads, so an unsafe total counts as unknown.
+  const total = Number(m[1]);
+  return Number.isSafeInteger(total) ? total : null;
+}
+
+/**
+ * Freshness validators captured from response headers, for cache
+ * revalidation. `lastModified` is CORS-safelisted (readable everywhere);
+ * `etag` is NOT, so on hosts without `Access-Control-Expose-Headers` it stays
+ * undefined — which is why both are optional and a size comparison remains
+ * the weakest always-available signal.
+ */
+export interface ArchiveValidators {
+  readonly etag?: string;
+  readonly lastModified?: string;
 }
 
 /** Raw result of the opening probe. */
@@ -29,17 +45,41 @@ export interface ProbeResult {
   readonly size: number | null;
   /** Full body — present only when the host ignored Range and answered 200. */
   readonly body?: Uint8Array;
+  /** Freshness validators from the probe responses, where readable. */
+  readonly validators?: ArchiveValidators;
 }
 
-/** Why the probe could not be turned into a usable open — the four causes a
- *  probe itself can produce. A consumer with app-specific fatal causes of its
+/** Why an open could not be turned into a usable archive. `decideFallback`
+ *  itself produces `missing`/`corrupt`/`unusable-link`; `'cors'` is produced
+ *  by the orchestrator (`open-remote-archive.ts`) when `fetch` rejects before
+ *  any HTTP status exists. A consumer with app-specific fatal causes of its
  *  own (e.g. "the file parsed but its contents were invalid") is expected to
  *  extend this union locally. */
 export type RangeProbeRejectCause =
   | 'unusable-link' // no size / opaque response — cannot range or read a body
   | 'cors' // cross-origin read blocked by the browser
   | 'corrupt' // truncated / garbage bytes / 416 on a non-empty archive
-  | 'missing'; // 404
+  | 'missing'; // 404 or 410 — see `isDefinitivelyGone`
+
+/**
+ * Is this status the host saying the resource is DELETED, as opposed to
+ * temporarily unreachable?
+ *
+ * Exists as one named predicate because the answer was given three different
+ * ways in one transport (PR #376 review): `remote-range-byte-source` tested
+ * `404 || 410`, this module and `open-remote-archive` tested only `404`, and
+ * the union above documented only `404`. The visible consequence: an archive
+ * deleted from a host that answers 410 reached the user as "That link cannot
+ * be opened as an archive" instead of "That file does not exist" — a wrong
+ * diagnosis of a correct server response.
+ *
+ * 410 Gone is a STRONGER statement than 404: the host asserts the resource
+ * existed and was removed. Anything that treats 404 as definitive must treat
+ * 410 as at least as definitive.
+ */
+export function isDefinitivelyGone(status: number): boolean {
+  return status === 404 || status === 410;
+}
 
 /** What the transport should do next. */
 export type FallbackDecision =
@@ -48,9 +88,18 @@ export type FallbackDecision =
   | { readonly mode: 'full-download' }
   | { readonly mode: 'reject'; readonly cause: RangeProbeRejectCause };
 
+/** Boundary defense: even if a caller lets an unvalidated size (NaN, a
+ *  negative, a float) through, it must never anchor a range-reading parser —
+ *  a bogus size corrupts every read. */
+function isUsableArchiveSize(size: number | null): size is number {
+  return size !== null && Number.isSafeInteger(size) && size >= 0;
+}
+
 export function decideFallback(probe: ProbeResult): FallbackDecision {
   if (probe.status === 206) {
-    if (probe.size !== null) return { mode: 'ranges', size: probe.size };
+    if (isUsableArchiveSize(probe.size)) {
+      return { mode: 'ranges', size: probe.size };
+    }
     // Ranges work but neither HEAD nor Content-Range yielded a total, and a
     // range-reading zip/archive parser needs the size to anchor its central
     // directory. A plain full download still works — degrade to it instead of
@@ -58,9 +107,15 @@ export function decideFallback(probe: ProbeResult): FallbackDecision {
     return { mode: 'full-download' };
   }
   if (probe.status === 200 && probe.body !== undefined) {
+    // A known HEAD size that disagrees with the streamed body means the 200
+    // was truncated (connection dropped mid-body) — caching/parsing those
+    // bytes would fail now and poison later visits (milestone review #13).
+    if (isUsableArchiveSize(probe.size) && probe.body.length !== probe.size) {
+      return { mode: 'reject', cause: 'corrupt' };
+    }
     return { mode: 'eager-local', body: probe.body };
   }
-  if (probe.status === 404) {
+  if (isDefinitivelyGone(probe.status)) {
     return { mode: 'reject', cause: 'missing' };
   }
   if (probe.status === 416) {

@@ -37,6 +37,23 @@ path, with no DOM in it.
     of seven neighbours admitted and three tiles downloaded;
     `geo-event-reach.test.ts` has the geometry and
     `demo-pipeline.test.ts` the end-to-end rule.
+    - **And it is admitted AFTER the centre's own download** (DEC-T13,
+      2026-09-05). The gate used to run before step 2; the centre's reach
+      overhangs into fetch tiles the refresh never loaded, that download often
+      completes a neighbour's reach, so the first press searched the centre
+      alone and the second press, from the same spot, searched four tiles —
+      the "press again and a second quest appears" the owner reported as
+      non-determinism. Now both presses see the same tiles, at no extra
+      download (the gate still requires the neighbour's whole reach loaded).
+      `demo-pipeline.test.ts` "does not creep outward" runs at Manhattan,
+      where the first press downloads, for exactly this.
+  - **One pick per spot.** `newGeoEventFor` is given `isSameQuestSpot`
+    (`MIN_PICK_SEPARATION_STEPS`, `resolutions.ts`): two tiles that climbed
+    onto one plateau from two sides — candidates are seeded in overlapping
+    bounding boxes — report it once, the higher heat surviving, an exact tie
+    going to the smaller cell id. `demo-pipeline.test.ts` rebuilds the owner's
+    report from the seed: the closest cross-tile candidate pair at Cologne, a
+    hot patch at their midpoint, both climbs on its plateau, one pick.
     - **The centre tile stays exempt**: the user is standing in it, so it is
       searched whatever it costs. Its own reach can overhang what a refresh
       loaded (one tile at Manhattan), which is a separate open question.
@@ -219,6 +236,24 @@ missing four stages** — the plan's own failure mode, one level down.
   only a separately measured whole can say the parts are wrong.
 - **`tilesUnmeasured` is a count, not an absence.** A fixture-backed run must
   not read as a click whose network cost nothing.
+- **`featuresHeld` is `tilesHeld`'s missing denominator** (added 2026-08-31).
+  It is the one measurement the perf ledger says would settle the unexplained
+  1.5 s / 9.5 s gap between what a build extrapolates to and what a slow click
+  costs — the recipe was written down on 2026-08-15 and had never been
+  implemented.
+  - Tile count alone cannot distinguish **seven small tiles from seven dense
+    ones**, and the two live explanations differ precisely there: a latent
+    quadratic that a branch merely exposed, versus code that genuinely got
+    slower. `meshMs` rising as ≈T² against `tilesHeld` says the first;
+    `meshMs` already seconds at one tile says the second.
+  - **It costs nothing to read.** `AffordanceIndex.mergedFeatures()` returns
+    its own `Map` uncopied, so this is a `.size`, not a traversal. An
+    instrument that walked the thing it measures would not belong on the click
+    path.
+  - Surfaced by `click-timings.ts` beside `tilesHeld`, and **never dropped when
+    zero** — a missing count on an empty pass would read as "the instrument is
+    not there", which is the one reading that would waste a measurement
+    session.
 - Every duration is floored at zero, for the reason `elapsedMs` gives in the OSM
   package: a negative makes the reconciliation close by cancelling, so the gate
   that would catch a clock problem goes quiet exactly when it should shout.

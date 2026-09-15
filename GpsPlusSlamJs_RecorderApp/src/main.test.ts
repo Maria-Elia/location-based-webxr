@@ -228,12 +228,6 @@ vi.mock('./storage/ref-point-loader', () => ({
   averageGpsPerRefPoint: vi.fn().mockReturnValue([]),
 }));
 
-vi.mock('gps-plus-slam-app-framework/visualization/reference-points', () => ({
-  refPointVisualizer: {
-    setZeroRef: vi.fn(),
-  },
-}));
-
 vi.mock('gps-plus-slam-app-framework/visualization/camera-follower', () => ({
   createCameraFollower: vi.fn().mockReturnValue({
     object3D: { name: 'camera-follower' }, // matches SCENE_NODE.CAMERA_FOLLOWER
@@ -283,6 +277,8 @@ vi.mock('./ui/hud', () => ({
   hideTrackingQuality: vi.fn(),
   setAbsCompassStatus: vi.fn(),
   hideAbsCompass: vi.fn(),
+  hideQrStatus: vi.fn(),
+  setQrStatus: vi.fn(),
 }));
 
 // Mock recording-discovery for handleOpenFolder tests (Issue 1 — 2026-02-27 + 2026-03-01)
@@ -293,16 +289,6 @@ vi.mock('./storage/recording-discovery', () => ({
   discoverScenariosFromZipMetadata: vi.fn().mockResolvedValue({
     scenarioSessions: new Map(),
     scenarioNames: [],
-  }),
-}));
-
-// Mock ref-point-importer for handleOpenFolder tests (Issue 1 — 2026-02-27)
-vi.mock('./storage/ref-point-importer', () => ({
-  importRefPointsFromFolder: vi.fn().mockResolvedValue({
-    success: true,
-    refPoints: [],
-    errors: [],
-    zipFilesScanned: 0,
   }),
 }));
 
@@ -530,7 +516,6 @@ import {
   listSessionZipsInScenario,
   discoverScenariosFromZipMetadata,
 } from './storage/recording-discovery';
-import { importRefPointsFromFolder } from './storage/ref-point-importer';
 import { showConfirmDialog } from './ui/confirm-dialog';
 import { pushScreenState } from './ui/navigation';
 
@@ -1792,7 +1777,7 @@ describe('Imported Reference Points in Picker (Task 1e)', () => {
    * the picker should show with empty suggestions (since IDs are now H3 hex
    * strings that are meaningless to users).
    */
-  it('should show picker with empty suggestions when no ref points are imported', async () => {
+  it('should open the name prompt when no ref points are imported', async () => {
     const { getCurrentArPose } =
       await import('gps-plus-slam-app-framework/ar/webxr-session');
     const { getCurrentScenarioHandle } =
@@ -1845,9 +1830,8 @@ describe('Imported Reference Points in Picker (Task 1e)', () => {
 
     // EXPECTED: showRefPointPicker called with empty suggestions (H3 IDs, not user names)
     expect(mockShowRefPointPicker).toHaveBeenCalled();
-    const passedIds = mockShowRefPointPicker.mock.calls[0][0] as string[];
-
-    expect(passedIds).toEqual([]);
+    // The prompt takes no arguments: it asks for a name, nothing else.
+    expect(mockShowRefPointPicker).toHaveBeenCalledWith();
 
     resetMainState();
   });
@@ -2613,14 +2597,6 @@ describe('handleOpenFolder — recording mode scenario dropdown', () => {
     await handleOpenFolderForTesting();
 
     expect(populateScenarios).toHaveBeenCalledWith(['ScenarioFromZip']);
-  });
-
-  it('should NOT call importRefPointsFromFolder (ref point import is scenario-scoped)', async () => {
-    // Why: Cross-scenario ZIP scan was removed; ref points are loaded
-    // per-scenario in loadAndDisplayRefPoints at scenario-selection time.
-    await handleOpenFolderForTesting();
-
-    expect(importRefPointsFromFolder).not.toHaveBeenCalled();
   });
 
   it('should update folder status with scenario count', async () => {

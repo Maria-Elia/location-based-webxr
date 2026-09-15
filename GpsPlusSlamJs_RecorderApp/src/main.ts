@@ -22,6 +22,11 @@ if (import.meta.env.PROD) {
   initSentry();
 }
 
+import { qrCodeId } from 'gps-plus-slam-app-framework/utils/qr-payload/qr-code-id';
+import { qrStatusLine } from './qr/qr-status-line';
+import { createQrHudState } from './qr/qr-hud-state';
+import { setQrStatus } from './ui/hud-status-rows';
+
 import {
   initUI,
   showError,
@@ -99,7 +104,10 @@ import {
   replaceScreenState,
   getCurrentScreen,
 } from './ui/navigation';
-import { createRecorderStore } from './state/recorder-store';
+import {
+  createRecorderStore,
+  type RecorderStore,
+} from './state/recorder-store';
 import { add2dImage } from 'gps-plus-slam-app-framework/state';
 import { recordDepthSample } from 'gps-plus-slam-app-framework/state/recording-slice';
 import {
@@ -118,7 +126,10 @@ import {
   createLoopClosureHandler,
   odometryTrackingRestarted,
 } from 'gps-plus-slam-app-framework/core';
+import { isSegmentingActionType } from 'gps-plus-slam-app-framework/state/segmenting-actions';
 import { createStoreRef } from './state/store-ref';
+import { debugUiEnabledFromSearch } from './debug-flag';
+import { createDebugWheel, type DebugWheel } from './ui/hud-debug-wheel';
 import { createArSessionScope } from './utils/ar-session-scope';
 import { createArSessionResources } from './ar/ar-session-resources';
 import { wireArScene } from './ar/wire-ar-scene';
@@ -195,6 +206,12 @@ let recordingOptions: RecordingOptions = loadRecordingOptions();
 let store = createNewStore();
 const storeRef = createStoreRef(store);
 
+// The in-recording settings wheel (2026-09-02, `?debug=1` only). Mounted once
+// at init; it follows `storeRef` itself, so every store swap re-applies what
+// the tester touched. `null` for every ordinary user - the flag is the only
+// surface change (see ui/hud-debug-wheel.ts.md).
+let debugWheel: DebugWheel | null = null;
+
 // Every AR-session-scoped resource registers its teardown here at its
 // creation site (see utils/ar-session-scope.ts and the 2026-07-11
 // lifecycle-scope plan doc). Entering AR again and `resetMainState` both
@@ -207,6 +224,70 @@ const arSessionScope = createArSessionScope();
 // contract is documented in ar/ar-session-resources.ts; holding them together
 // is what lets the wiring below live outside this file.
 const arSessionResources = createArSessionResources();
+
+/**
+ * The QR HUD row's per-session state. It lives in its own module because it
+ * MUST be cleared when an AR session starts: as three module-level values here
+ * nothing reset them, so a second session opened showing the previous one's
+ * code against a fresh accumulator.
+ */
+const qrHud = createQrHudState({ hashId: qrCodeId });
+
+/**
+ * Wrap a store so a frame-moving action also tells the QR sighting fold.
+ *
+ * The loop-closure handler dispatches `arLoopClosureDetected` from inside
+ * itself and offers no callback, so the only place to notice it is the store
+ * it was handed. Without this the segmentation gate exists but can never fire
+ * for a loop closure, and the mint would average two odometry frames into a
+ * plausible-looking anchor.
+ */
+function segmentAwareStore(target: RecorderStore): RecorderStore {
+  return {
+    ...target,
+    dispatch: ((action: unknown) => {
+      const type = (action as { type?: unknown }).type;
+      if (typeof type === 'string' && isSegmentingActionType(type)) {
+        arSessionResources.qrSightingFeeder?.noteFrameChange();
+      }
+      return target.dispatch(
+        action as Parameters<RecorderStore['dispatch']>[0]
+      );
+    }) as RecorderStore['dispatch'],
+  };
+}
+
+/**
+ * Refresh the HUD's QR row. Called from the camera-frame callback, which is
+ * the one place that ticks whether or not anything was detected — so the
+ * "scanning, nothing yet" state is reachable, which is the state the recorder
+ * used to show nothing at all for.
+ */
+function refreshQrStatus(): void {
+  const feeder = arSessionResources.qrSightingFeeder;
+  if (feeder === null) return;
+  // The code with the most recent detection — NOT `codes().at(-1)`, which is
+  // Map insertion order and names the wrong poster whenever two are in view.
+  let newest: string | null = null;
+  let newestAt = -Infinity;
+  for (const text of feeder.accumulator.codes()) {
+    const at = feeder.accumulator
+      .sightingsIncludingOpen(text)
+      .at(-1)?.lastTimestamp;
+    if (at !== undefined && at > newestAt) {
+      newestAt = at;
+      newest = text;
+    }
+  }
+  if (newest !== null) qrHud.noteNewest(newest);
+  setQrStatus(
+    qrStatusLine({
+      enabled: true,
+      accumulator: feeder.accumulator,
+      ...qrHud.snapshot(),
+    })
+  );
+}
 
 // F3.5d — live frame-tile visualization. The recorder caches every captured
 // frame blob in memory keyed by its `frames/<filename>` path, so the
@@ -241,6 +322,10 @@ let activeImageQualityAnalyzer: ImageQualityAnalyzerFn | null = null;
 // (Finding #7 decomposition: extracted from main.ts to replay/replay-handlers.ts)
 const replayHandlers = createReplayHandlers({
   setStore: (newStore) => {
+    // A replay store must not be driven by the debug wheel (a recording made
+    // without it would replay against the tester's live config); suspend
+    // BEFORE the swap so the wheel's store-follower sees a suspended wheel.
+    debugWheel?.suspend();
     store = newStore;
     storeRef.set(newStore);
   },
@@ -253,6 +338,10 @@ const recordingSessionHandlers = createRecordingSessionHandlers({
   setStore: (newStore) => {
     store = newStore;
     storeRef.set(newStore);
+    // A recording store: the wheel drives it again (see the replay swap
+    // above). AFTER the swap, so `resume()` applies to the new store and
+    // never to the outgoing, possibly replay, one (PR #407 review).
+    debugWheel?.resume();
   },
   rebindTrackingStore,
   // The per-recording quality-gate Worker analyzer: stored in main's
@@ -264,6 +353,7 @@ const recordingSessionHandlers = createRecordingSessionHandlers({
   createNewStore,
   getRecordingOptions: () => recordingOptions,
   getMapOverlay: () => arSessionResources.mapOverlay,
+  getQrSightingFeeder: () => arSessionResources.qrSightingFeeder,
   getSessionNotes,
   waitForZeroReference,
   loadAndDisplayRefPoints: (handle) =>
@@ -442,7 +532,13 @@ function wireLoopClosureCapture(): () => void {
     // closures from the recording. A rebind starts with empty last-pose
     // memory — correct for a fresh session/frame.
     if (boundStore !== store) {
-      arSessionResources.loopClosureHandler = createLoopClosureHandler(store);
+      // The handler dispatches `arLoopClosureDetected` itself, which rewrites
+      // stored trajectory — another odometry-frame change that stored QR
+      // poses do not follow. There is no callback for it, so the segmentation
+      // gate is told through the store the handler is given.
+      arSessionResources.loopClosureHandler = createLoopClosureHandler(
+        segmentAwareStore(store)
+      );
       boundStore = store;
     }
     // `getCurrentArPose()` is nulled by the framework on tracking loss and
@@ -614,9 +710,13 @@ export async function resetForNewRecording(): Promise<void> {
   // Reset recording-level counters
   gpsEventVisualizer.clearAll();
 
-  // Fresh store for next session
+  // Fresh store for next session. The debug wheel follows storeRef; a wheel
+  // suspended by a replay swap must be resumed onto the new live store or it
+  // would silently hold every change (PR #409 review) - same order as the
+  // recording swap above: store first, resume after.
   store = createNewStore();
   storeRef.set(store);
+  debugWheel?.resume();
 
   // --- Reset storage (preserve OPFS root, clear session handles) ---
   resetForNewSession();
@@ -829,6 +929,19 @@ async function main(): Promise<void> {
     onRequestPermissions: handleRequestPermissions,
   });
 
+  // The in-recording settings wheel (2026-09-02, `?debug=1` only): mounted
+  // here at init, not on AR entry, so it exists in every HUD state and in
+  // the e2e harness, which never enters a real AR session. It follows
+  // `storeRef` itself and dispatches nothing until touched.
+  if (debugUiEnabledFromSearch(window.location.search) && !debugWheel) {
+    const controlsRoot = document.getElementById('controls');
+    const overlayRoot = document.getElementById('app');
+    if (controlsRoot && overlayRoot) {
+      debugWheel = createDebugWheel({ storeRef, controlsRoot, overlayRoot });
+      debugWheel.attach();
+    }
+  }
+
   // Initialize session summary panel (shown after recording stops)
   initSessionSummary({
     onNewRecording: () => {
@@ -987,6 +1100,10 @@ async function handleEnterAR(): Promise<void> {
     // Replaces the per-block dispose-first guards this function used to
     // repeat — see utils/ar-session-scope.ts.
     arSessionScope.dispose();
+    // The QR HUD row is per-session state and the accumulator behind it is
+    // rebuilt below, so a stale code here would be rendered against an empty
+    // fold - `visit 0` for a poster this session has not seen.
+    qrHud.reset();
 
     // Request orientation permission (required on iOS)
     // Field Test Readiness Issue #2: Check return value and warn user
@@ -1050,8 +1167,10 @@ async function handleEnterAR(): Promise<void> {
       ...(recordingOptions.qr.enabled
         ? {
             cameraFrame: {
-              onFrame: (image) =>
-                arSessionResources.qrProducer?.offerFrame(image),
+              onFrame: (image) => {
+                arSessionResources.qrProducer?.offerFrame(image);
+                refreshQrStatus();
+              },
             },
           }
         : {}),
@@ -1066,6 +1185,11 @@ async function handleEnterAR(): Promise<void> {
         store,
         onRestarted: (payload) => {
           store.dispatch(odometryTrackingRestarted(payload));
+          // The odometry frame just moved under every stored QR pose, so
+          // sightings either side of this are not comparable. Without this
+          // call the segmentation gate exists but can never fire, and the
+          // mint would average two frames into a plausible-looking anchor.
+          arSessionResources.qrSightingFeeder?.noteFrameChange();
           // Origin reset: clear the loop-closure handler's last-pose memory
           // (deactivate ⇒ reset) before re-arming — the reference-space jump
           // is an origin correction, not a relocalization loop closure.
@@ -1165,6 +1289,10 @@ async function handleEnterAR(): Promise<void> {
         resources: arSessionResources,
         storeRef,
         liveFrameBlobs,
+        onQrLevelState: (text, state) => {
+          qrHud.noteLevelState(text, state);
+          refreshQrStatus();
+        },
       });
     }
 
@@ -1193,7 +1321,12 @@ async function handleEnterAR(): Promise<void> {
     showError(userMessage);
     // Issue #10: If initAR succeeded but a later step threw, the XR session
     // is left running with incomplete wiring. Tear it down to free GPU
-    // resources and avoid a broken half-initialized state.
+    // resources and avoid a broken half-initialized state. The scope goes
+    // first: every resource registered before the throw (frame feeds,
+    // visualizers, store subscriptions) lives there, and endARSession knows
+    // nothing about it - without this line they kept running against the
+    // dead session until the next Enter AR (simplify loop, 2026-09-04).
+    arSessionScope.dispose();
     try {
       await endARSession();
     } catch (cleanupErr) {
@@ -1478,7 +1611,10 @@ if (
   !import.meta.env.VITEST
 ) {
   void import('./test-utils/e2e-hooks').then(({ installE2eTestHooks }) =>
-    installE2eTestHooks({ ensureMapBrowserRoot })
+    installE2eTestHooks({
+      ensureMapBrowserRoot,
+      getDebugWheel: () => debugWheel,
+    })
   );
 }
 
