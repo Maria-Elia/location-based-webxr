@@ -21,7 +21,6 @@ import { buildMapData } from "gps-plus-slam-app-framework/visualization/map-data
 
 import { createAuthoringStore } from "../../store/authoring-store.js";
 import type { TourCoord } from "../../store/types.js";
-import { ICONS } from "../../components/shared/icons.js";
 import { mountOnboardingGate } from "../../components/onboarding/view/onboarding-view.js";
 import { createLiveGpsPositionSource } from "../../components/authoring/view/gps-position-source.js";
 import { createFilesAssetProvider } from "../../components/authoring/view/files-asset-provider.js";
@@ -32,7 +31,7 @@ import { createTourMap } from "../../components/map/view/tour-map.js";
 import { mountPackAndSharePanel } from "./pack-and-share-panel.js";
 import { packTour } from "../../components/packaging/core/pack-tour.js";
 import { downloadZip } from "gps-plus-slam-app-framework/storage";
-import { swapScreen } from "./screen-transition.js";
+import { swapScreen } from "../screen-transition.js";
 import {
   disableBeforeUnloadWarning,
   enableBeforeUnloadWarning,
@@ -45,24 +44,11 @@ import {
   restoreAuthoringDraft,
 } from "./restore-authoring-draft.js";
 
-/**
- * A real, publicly-shared tour, offered so a visitor who lands on the root
- * URL (no `?tour=`, so Authoring mode per D13) can see a finished tour
- * instead of only the authoring tool. Hosted on the tour creator's own
- * OneDrive share, not this repo.
- */
-const DEMO_TOUR_URL =
-  "https://my.microsoftpersonalcontent.com/personal/339942fd8b9cbd18/_layouts/15/download.aspx?share=IQCA5LWk0FVsQI4yCdiTHSqBAexdK1msWdmNSotvGQ1QmRw";
-
-/** Mounts the composed Authoring-mode flow into `root`. */
+/** Mounts the composed Authoring-mode flow into `root`. Entered from the
+ *  landing screen's "Create your own tour" action (`src/app/landing/`),
+ *  which owns the root-URL entry decision — this only ever renders the
+ *  onboarding gate straight through to the authoring tools. */
 export function mountAuthoringApp(root: HTMLElement): { destroy(): void } {
-  const demoLink = document.createElement("a");
-  demoLink.className = "demo-tour-chip";
-  demoLink.dataset["testid"] = "view-demo-tour";
-  demoLink.href = `${location.pathname}?tour=${encodeURIComponent(DEMO_TOUR_URL)}`;
-  demoLink.innerHTML = `${ICONS.pin}<span>View a demo tour</span>`;
-  root.appendChild(demoLink);
-
   const gateHost = document.createElement("div");
   gateHost.className = "gate-card";
   root.appendChild(gateHost);
@@ -74,7 +60,6 @@ export function mountAuthoringApp(root: HTMLElement): { destroy(): void } {
     requestGeolocationPermission,
     createAudioContext: () => new AudioContext(),
     onComplete: () => {
-      demoLink.remove();
       swapScreen(gateHost, () => {
         gate.destroy();
         void startAuthoringFlow(root);
@@ -84,7 +69,6 @@ export function mountAuthoringApp(root: HTMLElement): { destroy(): void } {
 
   return {
     destroy() {
-      demoLink.remove();
       gate.destroy();
       gateHost.remove();
     },

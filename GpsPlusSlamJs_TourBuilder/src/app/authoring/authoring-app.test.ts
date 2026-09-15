@@ -207,21 +207,6 @@ describe("Authoring mode composed flow", () => {
     expect(files[assetEntry.filename]).toBeDefined();
   }, 15000);
 
-  it("offers a demo-tour link on landing, which disappears once onboarding completes", async () => {
-    const { mountAuthoringApp } = await import("./authoring-app.js");
-    mountAuthoringApp(root);
-
-    const demoLink = root.querySelector<HTMLAnchorElement>(
-      '[data-testid="view-demo-tour"]',
-    );
-    expect(demoLink).not.toBeNull();
-    const tourParam = new URL(demoLink!.href).searchParams.get("tour");
-    expect(tourParam).toMatch(/^https:\/\/my\.microsoftpersonalcontent\.com\//);
-
-    await completeOnboarding(root);
-    expect(root.querySelector('[data-testid="view-demo-tour"]')).toBeNull();
-  });
-
   it("AC14: a denied permission keeps Start disabled and never mounts authoring tools", async () => {
     geolocationOutcome = "denied";
     const { mountAuthoringApp } = await import("./authoring-app.js");
