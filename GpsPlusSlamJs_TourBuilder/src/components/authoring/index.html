@@ -5,173 +5,32 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>gps-plus-slam — authoring tools demo</title>
     <link rel="stylesheet" href="../shared/demo.css" />
+    <link rel="stylesheet" href="./view/authoring-view.css" />
     <style>
-      /* Override shared demo.css: no full-bleed canvas here — a plain
-         scrolling DOM page, same override as the onboarding demo.
-         `html` too — on mobile browsers it's `html`'s overflow that
-         actually gates touch scrolling, not just `body`'s.
-         `!important`: Vite's production build injects demo.css's bundled
-         <link> at the END of <head>, after this inline block — reverses
-         the cascade this relies on in dev, so demo.css's `overflow: hidden`
-         otherwise wins in the deployed build only. */
-      html,
-      body {
-        overflow: auto !important;
-      }
-      main {
-        max-width: 640px;
-        margin: 0 auto;
-        padding: 20px;
-        display: grid;
-        gap: 20px;
-      }
-      .authoring-section,
-      .demo-section {
-        padding: 16px 18px;
-        background: rgb(255 255 255 / 3%);
-        border: 1px solid #2a3550;
-        border-radius: 10px;
-      }
-      .demo-section h2,
-      .authoring-section h2 {
-        margin: 0 0 12px;
-        font-size: 15px;
-        color: #9ec1ff;
-      }
-
-      /* ── Position section ─────────────────────────────────────────── */
-      #mode-controls {
-        display: flex;
-        gap: 12px;
-        align-items: center;
-        flex-wrap: wrap;
-        margin-bottom: 10px;
-      }
-      #scrub {
+      /* `#canvas-root`/`#hud` are shared/demo.css's canvas-overlay layout —
+         reused as-is (see #tools-root below) so this demo matches the real
+         app's full-bleed-map-below-header shell exactly (`#app-root >
+         .tools-shell`, app.css) instead of inventing its own. `html`
+         doesn't need the onboarding/store demos' `overflow: auto` override:
+         this demo, like the app, is meant to fill the viewport, not scroll. */
+      #tools-root {
+        position: relative;
         flex: 1;
-        min-width: 120px;
+        min-height: 0;
       }
-      #map-row {
-        display: flex;
-        gap: 10px;
-        align-items: flex-start;
+      .map-shell {
+        /* Colocated authoring-view.css positions `.map-shell` `absolute`
+           inside its nearest positioned ancestor — `#tools-root` above is
+           that ancestor here (the real app instead nests it under its own
+           `position: fixed` `.tools-shell`, see app.css). */
+        position: absolute;
       }
-      #map-host {
-        width: 100%;
-        height: 260px;
-        border-radius: 8px;
-        overflow: hidden;
-      }
-      .map-attribution {
-        max-width: 140px;
-        font-size: 11px;
-        line-height: 1.4;
-        color: #9aa7bd;
-        flex-shrink: 0;
-      }
-
-      /* ── Tour details / fields ────────────────────────────────────── */
-      .field {
-        display: grid;
-        gap: 4px;
-        margin-bottom: 20px;
-        font-size: 13px;
-        color: #9aa7bd;
-      }
-      .field input,
-      .field textarea {
-        padding: 6px 8px;
-        background: #10131a;
-        border: 1px solid #2a3550;
-        border-radius: 6px;
-        color: #e9eef7;
-        font-size: 14px;
-        font-family: inherit;
-      }
-      .field textarea {
-        min-height: 60px;
-        resize: vertical;
-      }
-
-      /* ── Waypoints ─────────────────────────────────────────────────── */
-      .empty-state {
-        margin: 12px 0 0;
-        color: #9aa7bd;
-        font-style: italic;
-      }
-      .waypoint-list {
-        display: grid;
-        gap: 20px;
-        margin-top: 20px;
-      }
-      .waypoint-card {
-        padding: 12px;
-        background: rgb(255 255 255 / 3%);
-        border: 1px solid #2a3550;
-        border-radius: 8px;
-      }
-      .waypoint-card-header {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-bottom: 10px;
-      }
-      .waypoint-card-header h3 {
-        margin: 0;
-        font-size: 14px;
-      }
-      .id-badge {
-        font-size: 11px;
-        font-family: monospace;
-        color: #9aa7bd;
-        background: #10131a;
-        border: 1px solid #2a3550;
-        border-radius: 4px;
-        padding: 1px 6px;
-      }
-      .asset-row {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin: 6px 0;
-        font-size: 13px;
-      }
-      .asset-row label {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-        color: #9aa7bd;
-      }
-      .asset-status {
-        color: #6ee7a8;
-      }
-
-      /* ── Buttons ───────────────────────────────────────────────────── */
-      button {
-        padding: 8px 14px;
-        background: #1b2338;
-        border: 1px solid #2a3550;
-        border-radius: 6px;
-        color: #e9eef7;
-        cursor: pointer;
-      }
-      button.primary {
-        background: #3d5488;
-        border-color: #4d6bb0;
-        font-weight: 600;
-      }
-      .waypoint-card-header button {
-        margin-left: auto;
-      }
-
-      #export-status {
-        margin-top: 10px;
-      }
-      #export-status[data-state="ok"] {
-        color: #6ee7a8;
-      }
-      #export-status[data-state="error"] {
-        color: #f87171;
+      /* Same reasoning as `.map-shell` above: authoring-view.css's
+         `.authoring-sections` positions itself relative to its nearest
+         positioned ancestor, `#tools-root`, rather than the whole viewport
+         (`.tools-shell` in the real app). */
+      .authoring-sections {
+        position: absolute;
       }
     </style>
   </head>
@@ -179,49 +38,28 @@
     <header class="page-header">
       <h1>Authoring tools demo</h1>
       <p class="lead">
-        Pick <strong>Live GPS</strong> (real device) or
-        <strong>Replay a recording</strong> — every recording zip in
-        <code>recordings/</code> is listed in the dropdown. Click
-        <strong>Drop Waypoint</strong> as the position moves, attach files to a
-        waypoint's model/sprite/audio slots, then
+        Live GPS only, same as the real app — walk to drop waypoints where you
+        stand, or use the map: drag a marker to fine-tune its position, or click
+        an empty spot to drop one exactly there. Attach files to a waypoint's
+        model/sprite/audio slots, then
         <strong>Export &amp; Pack</strong> to produce a downloadable
         <code>tour.zip</code> via component 5's <code>packTour</code> — load it
         in the cloud-loader or ar-scene demo to see it play back. QR generation
         is component 5's own demo.
       </p>
     </header>
-    <main>
-      <section class="demo-section">
-        <h2>Position</h2>
-        <div id="mode-controls">
-          <label
-            ><input type="radio" name="mode" value="live" checked /> Live
-            GPS</label
-          >
-          <label
-            ><input type="radio" name="mode" value="replay" /> Replay a
-            recording</label
-          >
-          <select id="recording-select"></select>
-          <button id="play-pause">Play</button>
-          <input id="scrub" type="range" min="0" value="0" />
+    <div id="tools-root">
+      <div class="map-shell" id="map-shell">
+        <div
+          class="map-card map-card-flush map-card-fullscreen"
+          id="map-host"
+        ></div>
+        <div class="map-badge map-badge-waiting" id="gps-badge">
+          Waiting for GPS…
         </div>
-        <p id="status"></p>
-        <div id="map-row">
-          <div id="map-host"></div>
-          <p class="map-attribution">
-            Map view — from Component 7, visualization only. Not part of
-            component 10.
-          </p>
-        </div>
-      </section>
-
-      <div id="authoring-root"></div>
-
-      <section class="demo-section">
-        <p id="export-status"></p>
-      </section>
-    </main>
+      </div>
+      <div class="authoring-sections" id="authoring-root"></div>
+    </div>
     <script type="module" src="./demo.ts"></script>
   </body>
 </html>
