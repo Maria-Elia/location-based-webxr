@@ -176,7 +176,11 @@ export function createThreeSceneAdapter(
       visuals.setVisible(visual, isVisible);
     },
 
-    showTranscript(handle: WaypointHandle, text: string, centered = false): void {
+    showTranscript(
+      handle: WaypointHandle,
+      text: string,
+      centered = false,
+    ): void {
       const node = registry.get(handle.waypointId);
       if (node === undefined) return;
       showTranscript(node, text, centered);

@@ -25,7 +25,11 @@ describe("buildLabeledField", () => {
   });
 
   it("adds no hint button when hint is omitted", () => {
-    const field = buildLabeledField("Name", document.createElement("input"), "tour-name");
+    const field = buildLabeledField(
+      "Name",
+      document.createElement("input"),
+      "tour-name",
+    );
     expect(field.querySelector('[data-testid="hint-tour-name"]')).toBeNull();
   });
 

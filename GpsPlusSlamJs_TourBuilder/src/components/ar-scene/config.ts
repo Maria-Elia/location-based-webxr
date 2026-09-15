@@ -54,7 +54,7 @@ const TRANSCRIPT_PADDING_M = 0.15;
  * Transport (play/pause) panel size, matched to component 1's demo panel
  * proportions.
  */
-export const TRANSPORT_PANEL_WIDTH_M = TRANSCRIPT_PANEL_WIDTH_M;
+export const TRANSPORT_PANEL_WIDTH_M = TRANSCRIPT_VISUAL_WIDTH_M;
 export const TRANSPORT_PANEL_HEIGHT_M = 0.4;
 
 /**

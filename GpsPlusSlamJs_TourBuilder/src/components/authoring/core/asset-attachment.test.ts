@@ -38,15 +38,11 @@ describe("buildAssetEntry", () => {
 describe("isAllowedAssetFile", () => {
   it("accepts a model file by its GLTF/GLB extension (contract: model is GLTF/GLB)", () => {
     expect(isAllowedAssetFile("model", new File([], "knight.glb"))).toBe(true);
-    expect(isAllowedAssetFile("model", new File([], "knight.gltf"))).toBe(
-      true,
-    );
+    expect(isAllowedAssetFile("model", new File([], "knight.gltf"))).toBe(true);
   });
 
   it("rejects a model file with an unrelated extension", () => {
-    expect(isAllowedAssetFile("model", new File([], "knight.mp3"))).toBe(
-      false,
-    );
+    expect(isAllowedAssetFile("model", new File([], "knight.mp3"))).toBe(false);
   });
 
   it("accepts common image extensions for sprite (contract: sprite is an image)", () => {
@@ -69,15 +65,11 @@ describe("isAllowedAssetFile", () => {
   });
 
   it("rejects an audio file with an unrelated extension", () => {
-    expect(isAllowedAssetFile("audio", new File([], "story.txt"))).toBe(
-      false,
-    );
+    expect(isAllowedAssetFile("audio", new File([], "story.txt"))).toBe(false);
   });
 
   it("is case-insensitive", () => {
-    expect(isAllowedAssetFile("model", new File([], "KNIGHT.GLB"))).toBe(
-      true,
-    );
+    expect(isAllowedAssetFile("model", new File([], "KNIGHT.GLB"))).toBe(true);
   });
 
   it("rejects a file with no extension", () => {

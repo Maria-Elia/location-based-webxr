@@ -126,7 +126,9 @@ async function openByteSource(
   // evict it and fall through to a fresh remote open.
   const cached = await store.get(zipUrl).catch(() => undefined);
   if (cached) {
-    const source = new SwitchableByteSource(new LocalCacheByteSource(cached));
+    const source = new SwitchableByteSource(
+      new LocalCacheByteSource(cached.blob),
+    );
     const entries = await readEntries(source);
     if (entries) return { source, cacheWarming: Promise.resolve(), entries };
     await store.delete(zipUrl).catch(() => undefined);
@@ -195,7 +197,7 @@ async function ingestFullCopy(
   store: LocalCacheStore,
 ): Promise<Omit<OpenedByteSource, "entries">> {
   const blob = new Blob([body as BlobPart]);
-  await store.put(zipUrl, blob);
+  await store.put(zipUrl, { blob });
   return {
     source: new SwitchableByteSource(new LocalCacheByteSource(blob)),
     cacheWarming: Promise.resolve(),
@@ -305,7 +307,7 @@ async function warmCache(
           `warm download size mismatch: got ${blob.size}, expected ${source.size}`,
         );
       }
-      await store.put(zipUrl, blob);
+      await store.put(zipUrl, { blob });
       source.switchTo(new LocalCacheByteSource(blob));
       return;
     } catch {

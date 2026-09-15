@@ -46,7 +46,8 @@ describe("prepareHostedZipUrl", () => {
     vi.doMock("gps-plus-slam-app-framework/storage", () => ({
       normalizeShareUrl: () => "https://example.com/normalized.zip",
     }));
-    const { prepareHostedZipUrl: prepare } = await import("./hosted-zip-url.js");
+    const { prepareHostedZipUrl: prepare } =
+      await import("./hosted-zip-url.js");
     const result = prepare("https://example.com/share/xyz", true);
     expect(result.url).toBe("https://example.com/normalized.zip");
     expect(result.notes).toEqual([

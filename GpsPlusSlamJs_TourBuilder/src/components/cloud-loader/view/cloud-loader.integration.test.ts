@@ -234,7 +234,7 @@ describe("openRemoteTour — reload reuses a completed cache", () => {
     // Simulate a truncated/corrupt warm from an earlier broken run: a stored
     // "complete" copy that no longer parses as a zip. Without eviction the cache
     // short-circuits before the network and bricks this URL forever.
-    await store.put(url, new Blob([new Uint8Array([1, 2, 3, 4])]));
+    await store.put(url, { blob: new Blob([new Uint8Array([1, 2, 3, 4])]) });
 
     const before = server.requestCount();
     const opened = await openRemoteTour(url, base);

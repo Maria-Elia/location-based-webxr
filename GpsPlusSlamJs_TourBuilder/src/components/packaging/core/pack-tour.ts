@@ -84,10 +84,16 @@ export async function packTour(
   const assets = resolveAssets(tour, assetFiles);
 
   try {
-    return await packFilesAsZip(
-      { path: TOUR_JSON, json: tour },
-      assets.map(({ filename, file }) => ({ path: filename, file })),
+    const assetEntries = await Promise.all(
+      assets.map(async ({ filename, file }) => ({
+        path: filename,
+        data: new Uint8Array(await file.arrayBuffer()),
+      })),
     );
+    return await packFilesAsZip([
+      { path: TOUR_JSON, data: JSON.stringify(tour) },
+      ...assetEntries,
+    ]);
   } catch (err) {
     if (err instanceof ZipPackagingError) {
       throw new PackagingError(`packTour: ${err.message}`);

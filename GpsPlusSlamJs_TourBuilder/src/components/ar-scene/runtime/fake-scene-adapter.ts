@@ -209,7 +209,11 @@ export function createFakeSceneAdapter(
       else visible.delete(owner);
     },
 
-    showTranscript(handle: WaypointHandle, text: string, centered = false): void {
+    showTranscript(
+      handle: WaypointHandle,
+      text: string,
+      centered = false,
+    ): void {
       transcriptLog.push(
         `show:${handle.waypointId}:${text.slice(0, 12)}${centered ? ":centered" : ""}`,
       );

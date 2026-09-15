@@ -18,3 +18,24 @@ import { validateLicenseKey } from "gps-plus-slam-app-framework/core";
 import { COMMUNITY_LICENSE_KEY } from "gps-plus-slam-app-framework/licensing";
 
 validateLicenseKey(COMMUNITY_LICENSE_KEY);
+
+// jsdom's Blob has no `stream()` (unlike Node's own Blob), which zip.js's
+// BlobReader/BlobWriter rely on. Only the `@vitest-environment jsdom` tests
+// (DOM-driven composed flows, e.g. authoring-app.test.ts) hit this; the
+// default node environment already has a real stream()-capable Blob.
+if (
+  typeof Blob !== "undefined" &&
+  typeof Blob.prototype.stream !== "function"
+) {
+  Blob.prototype.stream = function (
+    this: Blob,
+  ): ReadableStream<Uint8Array<ArrayBuffer>> {
+    const blob = this;
+    return new ReadableStream<Uint8Array<ArrayBuffer>>({
+      async start(controller) {
+        controller.enqueue(new Uint8Array(await blob.arrayBuffer()));
+        controller.close();
+      },
+    });
+  };
+}

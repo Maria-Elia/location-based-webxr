@@ -71,6 +71,12 @@ const ALLOWLIST = new Set([
   // recording to drive a replay. Shrinking it is a real change to what that
   // suite covers, so it gets an entry rather than a trim.
   'GpsPlusSlamJs_PhysicsDemo/playwright-tests/fixtures/sample-recording.zip',
+
+  // A real outdoor recording (Task 1) that TourBuilder's replay e2e tests
+  // feed through the proximity state machine / composed flow, per
+  // CLAUDE.md's "two test levels" — an irreplaceable field capture, same
+  // rationale as the ExampleRecordings above.
+  'GpsPlusSlamJs_TourBuilder/recordings/2026-06-22_16-06-59utc.zip',
 ]);
 
 function trackedFiles() {

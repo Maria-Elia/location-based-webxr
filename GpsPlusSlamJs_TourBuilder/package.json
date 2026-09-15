@@ -30,11 +30,11 @@
   },
   "dependencies": {
     "@reduxjs/toolkit": "^2.11.2",
-    "@zip.js/zip.js": "2.8.26",
+    "@zip.js/zip.js": "^2.11.2",
     "gps-plus-slam-app-framework": "workspace:*",
     "leaflet": "^1.9.4",
     "qrcode": "^1.5.4",
-    "three": "^0.184.0",
+    "three": "^0.185.1",
     "three-html-render": "^0.1.2"
   },
   "devDependencies": {
@@ -43,7 +43,7 @@
     "@types/leaflet": "^1.9.21",
     "@types/node": "^25.7.0",
     "@types/qrcode": "^1.5.6",
-    "@types/three": "^0.184.1",
+    "@types/three": "^0.185.4",
     "@vitest/eslint-plugin": "^1.6.17",
     "dependency-cruiser": "^17.4.0",
     "dpdm": "^4.2.0",

@@ -174,9 +174,7 @@ function viewDeps() {
     // view's built-in error handling also kicks in.
     packAndDownload: async (
       tour: Awaited<ReturnType<typeof session.exportTour>>["tour"],
-      assetFiles: Awaited<
-        ReturnType<typeof session.exportTour>
-      >["assetFiles"],
+      assetFiles: Awaited<ReturnType<typeof session.exportTour>>["assetFiles"],
     ) => {
       try {
         const blob = await packTour(tour, new Map(assetFiles));
