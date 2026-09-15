@@ -143,15 +143,23 @@ export function mountLandingScreen(
   demoLink.innerHTML = `${ICONS.pin}<span>View a demo tour</span><span class="demo-tour-chip-arrow">${ICONS.chevron}</span>`;
   host.append(demoLink);
 
-  // Dev/instructor escape hatch, not a visitor path: the root component
-  // gallery (`index.html`, one directory above `src/app/`) that lists every
-  // component's own standalone demo (billboard, proximity, map, …). Kept
-  // visually quiet — a plain link, not a third action button — so it never
-  // competes with the two real entry points above.
+  // Dev/instructor escape hatch, not a visitor path: the component gallery
+  // that lists every component's own standalone demo (billboard, proximity,
+  // map, …). Kept visually quiet — a plain link, not a third action button
+  // — so it never competes with the two real entry points above.
+  //
+  // The gallery moves between dev and the deployed GitHub Pages build, so
+  // this can't be one static relative href: in dev, Vite serves this screen
+  // nested under `/src/app/` and the gallery sits two levels up at the
+  // served root (`index.html`). The Pages workflow promotes the composed
+  // app's own `index.html` to the site root and relocates the gallery to
+  // `/gallery/` (`.github/workflows/deploy-tourbuilder-pages.yml`) — from
+  // that root, `../../index.html` clamps back to the app itself instead of
+  // reaching the gallery.
   const componentsLink = document.createElement("a");
   componentsLink.className = "landing-dev-link";
   componentsLink.dataset["testid"] = "landing-view-components";
-  componentsLink.href = "../../index.html";
+  componentsLink.href = import.meta.env.DEV ? "../../index.html" : "/gallery/";
   componentsLink.textContent = "View separate components";
   host.append(componentsLink);
 
