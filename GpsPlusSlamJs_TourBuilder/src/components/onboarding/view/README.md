@@ -20,6 +20,15 @@ mirrors RecorderApp's existing `requestAllPermissions()` precedent. A
 rejected framework call is caught and mapped to a `denied` result instead of
 propagating.
 
+## `onboarding-view.css`
+
+Skins the classes `onboarding-view.ts` assigns (`.perm-row`, `.perm-icon*`,
+`.perm-body`, `.perm-name`, `.perm-explanation`) plus `.gate-card`, which the
+caller applies to the host element it passes to `mountOnboardingGate`.
+Colocated here (not in `src/app/app.css`) so the component demo and Goal-2
+composition (`viewing-app.ts`, `authoring-app.ts`) render the identical
+checklist look; `app.css` pulls it in via `@import`.
+
 ## `onboarding-view.ts`
 
 ```ts

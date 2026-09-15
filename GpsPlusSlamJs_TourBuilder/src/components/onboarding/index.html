@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>gps-plus-slam — onboarding gate demo</title>
     <link rel="stylesheet" href="../shared/demo.css" />
+    <link rel="stylesheet" href="./view/onboarding-view.css" />
     <style>
       /* Override shared demo.css: that stylesheet assumes a full-bleed
          #canvas-root Three.js scene behind a floating #hud overlay. This
@@ -25,24 +26,30 @@
         margin: 24px auto 0;
         pointer-events: auto;
       }
+      /* .gate-card (onboarding-view.css) supplies the checklist skin; this
+         demo only adds the centered-column layout the real app doesn't
+         need (it places the gate inside its own screen host). */
       #gate-root {
-        display: grid;
-        gap: 12px;
         max-width: 420px;
         margin: 32px auto;
-        padding: 20px;
-        background: rgb(255 255 255 / 3%);
-        border: 1px solid #2a3550;
+      }
+      #debug-panel {
+        max-width: 420px;
+        margin: 16px auto 32px;
+        padding: 12px 14px;
+        background: rgb(0 0 0 / 30%);
+        border: 1px dashed #2a3550;
         border-radius: 10px;
       }
-      #gate-root button {
-        padding: 10px 16px;
-        font-size: 15px;
+      #debug-panel summary {
+        cursor: pointer;
+        font-size: 12px;
+        color: #9aa7bd;
       }
       #state-log {
-        max-width: 420px;
-        margin: 0 auto;
+        margin: 10px 0 0;
         font-size: 12px;
+        font-family: ui-monospace, monospace;
         white-space: pre-wrap;
         color: #9aa7bd;
       }
@@ -60,8 +67,11 @@
       </p>
       <p id="status"></p>
     </section>
-    <div id="gate-root"></div>
-    <pre id="state-log"></pre>
+    <div id="gate-root" class="gate-card"></div>
+    <details id="debug-panel">
+      <summary>Internal gate state (debug, not part of the real app)</summary>
+      <pre id="state-log"></pre>
+    </details>
     <script type="module" src="./demo.ts"></script>
   </body>
 </html>

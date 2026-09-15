@@ -6,11 +6,13 @@
  * is the piece that was missing — the composed app rendered those
  * components' real classes/testids with no stylesheet supplying them.
  *
- * Also supplies the CSS for component 9's onboarding gate (no classNames of
- * its own — targeted here via its stable [data-testid] attributes, so
- * component 9's source stays untouched) and component 10's authoring view
- * (targeted via its existing classNames, same reasoning).
+ * Also supplies the CSS for component 10's authoring view (targeted via its
+ * existing classNames). Component 9's onboarding gate is styled by its own
+ * colocated stylesheet, imported below, so the demo and the composed app
+ * render the identical look.
  */
+
+@import "../components/onboarding/view/onboarding-view.css";
 
 :root {
   --bg: #10131a;
@@ -132,15 +134,13 @@ button:disabled {
   cursor: not-allowed;
 }
 
-button.primary,
-.gate-card [data-testid="start"] {
+button.primary {
   background: var(--primary);
   border-color: var(--primary-hover);
   font-weight: 600;
 }
 
-button.primary:hover:not(:disabled),
-.gate-card [data-testid="start"]:hover:not(:disabled) {
+button.primary:hover:not(:disabled) {
   background: var(--primary-hover);
 }
 
@@ -466,78 +466,6 @@ p[data-testid="qr-status"] {
 .landing-dev-link:hover,
 .landing-dev-link:focus-visible {
   color: var(--text);
-}
-
-/* ── Onboarding gate (component 9 — no classNames, styled via testid) ──── */
-
-.gate-card {
-  display: grid;
-  gap: var(--space-fluid-3);
-  padding: var(--space-fluid-5);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-}
-
-.perm-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-2) 0;
-  border-bottom: 1px solid var(--border);
-}
-
-.perm-row:last-of-type {
-  border-bottom: none;
-}
-
-.perm-icon {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-sm);
-  background: rgb(255 255 255 / 4%);
-  color: var(--text-muted);
-  flex-shrink: 0;
-  transition:
-    background var(--duration-base) var(--ease-out),
-    color var(--duration-base) var(--ease-out);
-}
-
-.perm-icon-requesting {
-  background: rgb(158 193 255 / 12%);
-  color: var(--accent);
-}
-
-.perm-icon-granted {
-  background: rgb(110 231 168 / 14%);
-  color: var(--success);
-}
-
-.perm-icon-denied {
-  background: rgb(248 113 113 / 14%);
-  color: var(--error);
-}
-
-.perm-body {
-  flex: 1;
-}
-
-.perm-name {
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.perm-explanation {
-  margin: 1px 0 0;
-  font-size: 12px;
-  color: var(--error);
-  transition: color var(--duration-base) var(--ease-out);
-}
-
-.gate-card button {
-  width: 100%;
 }
 
 /* ── Resume-draft prompt ──────────────────────────────────────────────── */
