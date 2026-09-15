@@ -39,6 +39,7 @@ vi.mock("leaflet", () => {
         panTo: vi.fn((latlng: [number, number]) => {
           moveCalls.push(latlng);
         }),
+        getZoom: vi.fn(() => 17),
         remove: vi.fn(),
         invalidateSize: vi.fn(),
       })),
