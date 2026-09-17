@@ -72,11 +72,12 @@ const ALLOWLIST = new Set([
   // suite covers, so it gets an entry rather than a trim.
   'GpsPlusSlamJs_PhysicsDemo/playwright-tests/fixtures/sample-recording.zip',
 
-  // A real outdoor recording (Task 1) that TourBuilder's replay e2e tests
-  // feed through the proximity state machine / composed flow, per
-  // CLAUDE.md's "two test levels" — an irreplaceable field capture, same
-  // rationale as the ExampleRecordings above.
+  // Real outdoor recordings (Task 1) that TourBuilder's replay e2e tests feed
+  // through the proximity state machine / composed flow, per CLAUDE.md's "two
+  // test levels" — irreplaceable field captures, same rationale as the
+  // ExampleRecordings above.
   'GpsPlusSlamJs_TourBuilder/recordings/2026-06-22_16-06-59utc.zip',
+  'GpsPlusSlamJs_TourBuilder/recordings/2026-08-28_16-00-00utc_nyc-42nd-6th-43rd-turn-walk.zip',
 ]);
 
 function trackedFiles() {
