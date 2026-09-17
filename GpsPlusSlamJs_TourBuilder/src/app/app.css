@@ -1216,13 +1216,14 @@ p[data-testid="qr-status"] {
   justify-content: flex-end;
 }
 
-/* Auto-walk's one-time callout (hud.ts) — points down at the button it
-   introduces rather than turning the feature on unasked. */
-.autopilot-wrap {
+/* A toggle button's one-time callout (hud.ts) — points down at the button
+   it introduces rather than turning the feature on unasked. Shared by
+   Auto-walk and the wayfinding guide toggle: same bubble, different text. */
+.hud-hint-wrap {
   position: relative;
 }
 
-.autopilot-hint {
+.hud-hint {
   position: absolute;
   bottom: calc(100% + 10px);
   left: 50%;
@@ -1237,18 +1238,20 @@ p[data-testid="qr-status"] {
   color: white;
   font-size: 12px;
   font-weight: 500;
-  white-space: nowrap;
+  /* Wraps rather than a fixed nowrap line — a phone-width viewport can be
+     narrower than the hint text itself, centered or not. */
+  max-width: min(220px, calc(100vw - 24px));
   box-shadow: 0 4px 12px rgb(0 0 0 / 40%);
-  animation: autopilot-hint-in var(--duration-base) var(--ease-out) both;
+  animation: hud-hint-in var(--duration-base) var(--ease-out) both;
 }
 
 /* `display: flex` above otherwise beats the UA stylesheet's `[hidden] {
    display: none }` (same specificity, author rule loads later) — the
    exact bug already hit once this session on `.landing-link-form` and
    `.authoring-sections`. Without this, `hint.hidden = true` (the close
-   button, dismissAutopilotHint(), and the auto-timeout all just set this)
-   updates the DOM attribute but the bubble stays visually on screen. */
-.autopilot-hint[hidden] {
+   button, dismiss*Hint(), and the auto-timeout all just set this) updates
+   the DOM attribute but the bubble stays visually on screen. */
+.hud-hint[hidden] {
   display: none;
 }
 
@@ -1257,10 +1260,11 @@ p[data-testid="qr-status"] {
    map markers (see their own comments: a bare icon-sized hitbox is
    precise to the point of unusable, worse on touch), without changing
    the bubble's footprint the way actually growing the button would. */
-.autopilot-hint-close {
+.hud-hint-close {
   position: relative;
   display: grid;
   place-items: center;
+  flex-shrink: 0;
   width: 16px;
   height: 16px;
   min-height: 0;
@@ -1273,17 +1277,17 @@ p[data-testid="qr-status"] {
   line-height: 1;
 }
 
-.autopilot-hint-close::before {
+.hud-hint-close::before {
   content: "";
   position: absolute;
   inset: -8px;
 }
 
-.autopilot-hint-close:hover {
+.hud-hint-close:hover {
   background: rgb(255 255 255 / 32%);
 }
 
-.autopilot-hint-arrow {
+.hud-hint-arrow {
   position: absolute;
   top: 100%;
   left: 50%;
@@ -1292,7 +1296,7 @@ p[data-testid="qr-status"] {
   line-height: 0;
 }
 
-@keyframes autopilot-hint-in {
+@keyframes hud-hint-in {
   from {
     opacity: 0;
     transform: translate(-50%, 6px);

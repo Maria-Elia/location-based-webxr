@@ -2,16 +2,18 @@
  * The in-session HUD (plan VC9, VC23, VC24, VC15f).
  *
  * Mounted into the AR container, i.e. the WebXR DOM Overlay root, so it
- * composites over the camera feed. Holds the map toggle, the End-tour control,
- * the alignment/tracking coaching line, and a one-shot notice channel for
- * things the visitor must be told (audio blocked, map tiles unavailable).
+ * composites over the camera feed. Holds the map toggle, the wayfinding guide
+ * toggle, the End-tour control, the alignment/tracking coaching line, and a
+ * one-shot notice channel for things the visitor must be told (audio
+ * blocked, map tiles unavailable).
  *
  * Knows nothing about the store or the scene — `viewing-app.ts` pushes text
  * in and reacts to the callbacks.
  */
 
-/** How long the autopilot hint stays up before it dismisses itself. */
+/** How long a callout hint stays up before it dismisses itself. */
 const AUTOPILOT_HINT_TIMEOUT_MS = 8000;
+const WAYFINDING_HINT_TIMEOUT_MS = 8000;
 
 /** A small downward-pointing chevron — the hint bubble sits above the
  *  button and needs to visually point down at it. */
@@ -23,6 +25,9 @@ export interface HudOptions {
   readonly onEndTour: () => void;
   /** Preview mode only: walk the breadcrumb automatically (VC25). */
   readonly onToggleAutopilot?: () => void;
+  /** Show/hide the single wayfinding guide indicator — available in both
+   *  AR and preview, unlike autopilot (plan 2026-09-17-breadcrumb-wayfinding). */
+  readonly onToggleWayfinding: () => void;
 }
 
 export interface Hud {
@@ -36,6 +41,9 @@ export interface Hud {
   /** Hides the one-time "try Auto-walk" callout, if it's still showing.
    *  No-op once already dismissed or when there's no autopilot toggle. */
   dismissAutopilotHint(): void;
+  setWayfindingLabel(label: string): void;
+  /** Hides the one-time "try Wayfinding" callout, if it's still showing. */
+  dismissWayfindingHint(): void;
   destroy(): void;
 }
 
@@ -71,51 +79,84 @@ export function mountHud(container: HTMLElement, options: HudOptions): Hud {
   autopilot.textContent = "Auto-walk";
   autopilot.dataset.testid = "viewing-autopilot";
 
-  // A one-time callout above the button rather than turning autopilot on
-  // by itself: the visitor stays in control of how they move from the
-  // first frame, but still finds out this exists instead of only via the
-  // status line's prose.
-  let autopilotHintTimer: ReturnType<typeof setTimeout> | undefined;
-  let hideAutopilotHint: (() => void) | undefined;
+  const wayfinding = document.createElement("button");
+  wayfinding.textContent = "Wayfinding";
+  wayfinding.dataset.testid = "viewing-wayfinding";
+  wayfinding.addEventListener("click", () => options.onToggleWayfinding());
 
-  if (options.onToggleAutopilot) {
-    const autopilotWrap = document.createElement("div");
-    autopilotWrap.className = "autopilot-wrap";
+  /**
+   * A one-time callout above a toggle button rather than turning the
+   * feature on by itself: the visitor stays in control from the first
+   * frame, but still finds out the feature exists instead of only via the
+   * status line's prose. Shared by autopilot and the wayfinding guide —
+   * same bubble, same dismiss/close/auto-timeout behavior, different text.
+   */
+  function mountHintedToggle(
+    button: HTMLButtonElement,
+    hintTestid: string,
+    hintText: string,
+    timeoutMs: number,
+  ): { readonly wrap: HTMLDivElement; dismiss: () => void } {
+    const wrap = document.createElement("div");
+    wrap.className = "hud-hint-wrap";
 
     const hint = document.createElement("div");
-    hint.className = "autopilot-hint";
-    hint.dataset.testid = "viewing-autopilot-hint";
+    hint.className = "hud-hint";
+    hint.dataset.testid = hintTestid;
 
-    const hintText = document.createElement("span");
-    hintText.textContent = "Try Auto-walk to move hands-free";
+    const hintTextEl = document.createElement("span");
+    hintTextEl.textContent = hintText;
     const hintClose = document.createElement("button");
     hintClose.type = "button";
-    hintClose.className = "autopilot-hint-close";
+    hintClose.className = "hud-hint-close";
     hintClose.setAttribute("aria-label", "Dismiss");
     hintClose.textContent = "×";
     const hintArrow = document.createElement("span");
-    hintArrow.className = "autopilot-hint-arrow";
+    hintArrow.className = "hud-hint-arrow";
     hintArrow.innerHTML = DOWN_ARROW_SVG;
 
-    hint.append(hintText, hintClose, hintArrow);
+    hint.append(hintTextEl, hintClose, hintArrow);
 
-    hideAutopilotHint = () => {
+    const dismiss = (): void => {
       if (hint.hidden) return;
       hint.hidden = true;
-      clearTimeout(autopilotHintTimer);
+      clearTimeout(timer);
     };
-    hintClose.addEventListener("click", hideAutopilotHint);
-    autopilotHintTimer = setTimeout(
-      hideAutopilotHint,
-      AUTOPILOT_HINT_TIMEOUT_MS,
-    );
+    hintClose.addEventListener("click", dismiss);
+    const timer = setTimeout(dismiss, timeoutMs);
 
-    autopilot.addEventListener("click", () => options.onToggleAutopilot?.());
-    autopilotWrap.append(hint, autopilot);
-    controls.appendChild(autopilotWrap);
+    wrap.append(hint, button);
+    return { wrap, dismiss };
   }
 
+  let hideAutopilotHint: (() => void) | undefined;
+  if (options.onToggleAutopilot) {
+    const { wrap, dismiss } = mountHintedToggle(
+      autopilot,
+      "viewing-autopilot-hint",
+      "Try Auto-walk to move hands-free",
+      AUTOPILOT_HINT_TIMEOUT_MS,
+    );
+    hideAutopilotHint = dismiss;
+    autopilot.addEventListener("click", () => options.onToggleAutopilot?.());
+    controls.appendChild(wrap);
+  }
+
+  // Map + End tour sit between the two hinted toggles on purpose: both
+  // hint bubbles are much wider than their own button and both show on
+  // mount, so placing Auto-walk and Wayfinding directly adjacent makes
+  // the two callouts overlap.
   controls.append(mapToggle, endTour);
+
+  const { wrap: wayfindingWrap, dismiss: hideWayfindingHint } =
+    mountHintedToggle(
+      wayfinding,
+      "viewing-wayfinding-hint",
+      "Try Wayfinding to find your way",
+      WAYFINDING_HINT_TIMEOUT_MS,
+    );
+  controls.appendChild(wayfindingWrap);
+
   element.append(status, notice, controls);
   container.appendChild(element);
 
@@ -137,8 +178,15 @@ export function mountHud(container: HTMLElement, options: HudOptions): Hud {
     dismissAutopilotHint() {
       hideAutopilotHint?.();
     },
+    setWayfindingLabel(label) {
+      wayfinding.textContent = label;
+    },
+    dismissWayfindingHint() {
+      hideWayfindingHint();
+    },
     destroy() {
-      clearTimeout(autopilotHintTimer);
+      hideAutopilotHint?.();
+      hideWayfindingHint();
       element.remove();
     },
   };

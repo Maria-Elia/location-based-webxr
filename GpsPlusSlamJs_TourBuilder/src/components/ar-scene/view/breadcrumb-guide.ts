@@ -43,8 +43,37 @@ export interface BreadcrumbGuideOptions {
 
 export interface BreadcrumbGuide {
   setTarget(target: BreadcrumbTarget | null): void;
+  /**
+   * World positions of every currently-ACTIVE waypoint. While any of them
+   * is roughly in front of the camera, the indicator is suppressed — its
+   * picture/model is up close and the guide's fixed ring would otherwise
+   * float in front of it. Not tied to the ACTIVE zone's whole lifetime: a
+   * waypoint that stays ACTIVE but falls out of view (the visitor walked
+   * past and turned away) no longer suppresses anything.
+   */
+  setActiveWaypointPositions(positions: readonly Vector3[]): void;
   update(dtSeconds: number): void;
   dispose(): void;
+}
+
+/** Generous margin over the camera's own vertical half-FOV — content just
+ *  at the edge of view still counts as "in the way", not only dead centre. */
+const IN_VIEW_HALF_ANGLE_FACTOR = 1.3;
+
+function isActiveContentInView(
+  camera: PerspectiveCamera,
+  activePositions: readonly Vector3[],
+): boolean {
+  if (activePositions.length === 0) return false;
+  const camPos = camera.getWorldPosition(new Vector3());
+  const forward = camera.getWorldDirection(new Vector3());
+  const halfFovRad = (camera.fov / 2) * (Math.PI / 180);
+  const cosThreshold = Math.cos(halfFovRad * IN_VIEW_HALF_ANGLE_FACTOR);
+  return activePositions.some((p) => {
+    const dir = p.clone().sub(camPos);
+    if (dir.lengthSq() === 0) return true;
+    return dir.normalize().dot(forward) > cosThreshold;
+  });
 }
 
 export function createBreadcrumbGuide(
@@ -56,11 +85,15 @@ export function createBreadcrumbGuide(
   let anchor: OrbAnchor | null = null;
   let currentIndex: number | null = null;
   let currentCoord: TourCoord | null = null;
+  let activeWaypointPositions: readonly Vector3[] = [];
 
   const hud: WayfindingHud = createWayfindingHud({
     camera: options.camera,
     getTargets: () => {
       if (currentIndex === null) return [];
+      if (isActiveContentInView(options.camera, activeWaypointPositions)) {
+        return [];
+      }
       // The anchor may have moved `marker` since the last render tick (real
       // AR mode updates it via the alignment lerp loop, which runs before
       // this, but nothing guarantees that ordering in every host) — force
@@ -79,6 +112,10 @@ export function createBreadcrumbGuide(
   });
 
   return {
+    setActiveWaypointPositions(positions: readonly Vector3[]): void {
+      activeWaypointPositions = positions;
+    },
+
     setTarget(target: BreadcrumbTarget | null): void {
       if (target === null) {
         currentIndex = null;

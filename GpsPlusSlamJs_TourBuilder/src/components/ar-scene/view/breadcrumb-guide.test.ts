@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { describe, expect, it, vi } from "vitest";
-import { Group, PerspectiveCamera } from "three";
+import { Group, PerspectiveCamera, Vector3 } from "three";
 
 import type { TourCoord } from "../../../store/types.js";
 import type { OrbAnchor } from "./breadcrumb-orbs.js";
@@ -140,6 +140,76 @@ describe("createBreadcrumbGuide", () => {
     guide.setTarget(null);
     guide.update(1 / 60);
     expect(findIndicator(camera)).toBeUndefined();
+    guide.dispose();
+  });
+
+  it("suppresses the indicator while an ACTIVE waypoint is roughly in front of the camera", () => {
+    const parent = new Group();
+    const camera = new PerspectiveCamera();
+    const { factory } = identityAnchorFactory();
+    const guide = createBreadcrumbGuide({
+      parent,
+      camera,
+      anchorFactory: factory,
+      distanceMinM: 0,
+      distanceMaxM: 50,
+    });
+    guide.setTarget({ index: 0, coord: { lat: 0, lon: -5 } });
+    guide.update(1 / 60);
+    expect(findIndicator(camera)).toBeDefined();
+
+    // Default camera looks down -Z; a waypoint straight ahead is exactly
+    // where its picture/model would be up close and visible.
+    guide.setActiveWaypointPositions([new Vector3(0, 0, -10)]);
+    guide.update(1 / 60);
+    expect(findIndicator(camera)).toBeUndefined();
+
+    guide.dispose();
+  });
+
+  it("does not suppress the indicator when the ACTIVE waypoint is behind the camera", () => {
+    const parent = new Group();
+    const camera = new PerspectiveCamera();
+    const { factory } = identityAnchorFactory();
+    const guide = createBreadcrumbGuide({
+      parent,
+      camera,
+      anchorFactory: factory,
+      distanceMinM: 0,
+      distanceMaxM: 50,
+    });
+    guide.setTarget({ index: 0, coord: { lat: 0, lon: -5 } });
+
+    // Behind the camera — "still open, just behind me": walking past an
+    // open waypoint and turning away must bring the guide back even
+    // though that waypoint's zone hasn't exited ACTIVE yet.
+    guide.setActiveWaypointPositions([new Vector3(0, 0, 10)]);
+    guide.update(1 / 60);
+    expect(findIndicator(camera)).toBeDefined();
+
+    guide.dispose();
+  });
+
+  it("shows the indicator again once the active waypoint list is cleared", () => {
+    const parent = new Group();
+    const camera = new PerspectiveCamera();
+    const { factory } = identityAnchorFactory();
+    const guide = createBreadcrumbGuide({
+      parent,
+      camera,
+      anchorFactory: factory,
+      distanceMinM: 0,
+      distanceMaxM: 50,
+    });
+    guide.setTarget({ index: 0, coord: { lat: 0, lon: -5 } });
+    guide.setActiveWaypointPositions([new Vector3(0, 0, -10)]);
+    guide.update(1 / 60);
+    expect(findIndicator(camera)).toBeUndefined();
+
+    guide.setActiveWaypointPositions([]);
+    guide.update(1 / 60);
+    expect(findIndicator(camera)).toBeDefined();
+
     guide.dispose();
   });
 

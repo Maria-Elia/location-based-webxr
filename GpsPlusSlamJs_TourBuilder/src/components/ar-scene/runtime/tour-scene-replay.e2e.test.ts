@@ -178,6 +178,9 @@ describe("AR viewing scene replay e2e — real Task 1 walk", () => {
         /* quiet */
       },
     });
+    // Off by default (opt-in) — this replay exercises the guide itself, so
+    // turn it on explicitly rather than asserting against a hidden target.
+    scene.setWayfindingEnabled(true);
     store.dispatch(loadTour(fixture.tour));
 
     const everVisible = new Set<string>();

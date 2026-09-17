@@ -104,6 +104,13 @@ export interface TourSceneOptions {
 export interface TourScene {
   /** Call once per frame from whichever loop owns the app (plan A21). */
   tick(dtSeconds: number): void;
+  /**
+   * Show/hide the single wayfinding guide indicator (off by default — an
+   * opt-in aid, not forced on every visitor). Breadcrumb progress keeps
+   * advancing in the background either way; this only gates whether
+   * `adapter.setWayfindingTarget` ever receives a non-null target.
+   */
+  setWayfindingEnabled(enabled: boolean): void;
   /** Idempotent, ordered teardown. Safe while loads are in flight. */
   dispose(): void;
   /** Introspection for the demo HUD and the replay assertions. */
@@ -162,6 +169,7 @@ export function createTourScene(options: TourSceneOptions): TourScene {
   let sinceTrailUpdate = TRAIL_UPDATE_INTERVAL_S;
   let syncing = false;
   let disposed = false;
+  let wayfindingEnabled = false;
 
   // ── Proximity (plan A2) ─────────────────────────────────────────────────────
   const scratchObjects: ProximityObject[] = [];
@@ -397,16 +405,41 @@ export function createTourScene(options: TourSceneOptions): TourScene {
     }
     const nextCoord = next === null ? null : coords[next] ?? null;
     adapter.setWayfindingTarget(
-      next === null || nextCoord === null
+      !wayfindingEnabled || next === null || nextCoord === null
         ? null
         : { index: next, coord: nextCoord },
     );
+
+    adapter.setActiveWaypointPositions(collectActiveWaypointPositions());
+  }
+
+  // Every ACTIVE waypoint's world position — the adapter suppresses the
+  // wayfinding indicator only while one of these is actually in the
+  // camera's current view (it has the camera; this layer doesn't), not
+  // for the whole time a zone stays ACTIVE. Walking past an open waypoint
+  // and turning away must bring the guide back even though that zone
+  // hasn't exited yet.
+  function collectActiveWaypointPositions(): readonly Vector3[] {
+    if (currentTour === null) return [];
+    const positions: Vector3[] = [];
+    for (const waypoint of currentTour.waypoints) {
+      if (previousZones[waypoint.id] !== "ACTIVE") continue;
+      const presenter = presenters.get(waypoint.id);
+      if (presenter === undefined) continue;
+      const position = adapter.getWorldPosition(presenter.handle);
+      if (position !== null) positions.push(position);
+    }
+    return positions;
   }
 
   const unsubscribeStore = store.subscribe(onStoreChange);
   onStoreChange(); // adopt a tour that was already loaded before we attached
 
   return {
+    setWayfindingEnabled(enabled: boolean): void {
+      wayfindingEnabled = enabled;
+    },
+
     tick(dtSeconds: number): void {
       if (disposed) return;
       driver.tick();

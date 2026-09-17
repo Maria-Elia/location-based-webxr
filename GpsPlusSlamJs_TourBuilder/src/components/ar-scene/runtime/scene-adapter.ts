@@ -96,6 +96,15 @@ export interface SceneAdapter {
 
   /** The single "walk here next" guide target (plan 2026-09-17). */
   setWayfindingTarget(target: BreadcrumbTarget | null): void;
+  /**
+   * World positions of every currently-ACTIVE waypoint (plan
+   * 2026-09-17-breadcrumb-wayfinding). Lets the concrete adapter suppress
+   * the wayfinding indicator only while one of them is actually in the
+   * camera's current view, not for the whole time it stays ACTIVE — after
+   * the visitor walks past an open waypoint and turns away, the guide
+   * should reappear even though that zone hasn't exited yet.
+   */
+  setActiveWaypointPositions(positions: readonly Vector3[]): void;
 
   // ── Visuals: template (shared, LRU'd) vs instance (per waypoint) ───────────
   /** Fetch-free: parse the asset at `url` into a shared template. Async + heavy. */

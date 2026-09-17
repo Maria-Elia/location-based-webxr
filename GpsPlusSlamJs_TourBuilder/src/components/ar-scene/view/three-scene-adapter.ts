@@ -152,6 +152,10 @@ export function createThreeSceneAdapter(
       breadcrumbGuide.setTarget(target);
     },
 
+    setActiveWaypointPositions(positions: readonly Vector3[]): void {
+      breadcrumbGuide.setActiveWaypointPositions(positions);
+    },
+
     buildTemplate(
       kind: "model" | "sprite",
       url: string,
