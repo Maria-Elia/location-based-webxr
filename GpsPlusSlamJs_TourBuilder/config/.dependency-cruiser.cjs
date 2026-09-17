@@ -5,12 +5,15 @@ module.exports = {
     // `three` itself is included (but never followed, see doNotFollow) so the
     // ar-scene runtime boundary rule below has an edge to match on — with a
     // src/components/store-only graph, external imports simply vanish and the rule
-    // could never fire.
+    // could never fire. gps-plus-slam-osm and h3-js are included the same way,
+    // for the desktop-preview-only boundary rule below.
     includeOnly: [
       "^src/components",
       "^src/store",
       "^src/app",
       "node_modules/three/",
+      "node_modules/gps-plus-slam-osm/",
+      "node_modules/h3-js/",
     ],
     reporterOptions: { dot: { collapsePattern: "node_modules/[^/]*" } },
     enhancedResolveOptions: {
@@ -61,6 +64,21 @@ module.exports = {
         pathNot: "\\.test\\.ts$|fake-scene-adapter\\.ts$",
       },
       to: { path: "node_modules/three", dependencyTypesNot: ["type-only"] },
+    },
+
+    // Desktop-preview-only dependency (plan
+    // 2026-08-27-desktop-preview-osm-buildings-plan.md): gps-plus-slam-osm and
+    // h3-js pull in a live Overpass client and are online-only. The real
+    // AR/phone viewing path must keep working with no network beyond the
+    // packaged tour, so neither may reach it — even transitively through
+    // src/app/viewing, which composes the live session.
+    {
+      name: "osm-desktop-preview-only",
+      comment:
+        "gps-plus-slam-osm/h3-js are for components/desktop-preview only — the real AR/phone path (ar-scene, app/viewing) must not depend on them.",
+      severity: "error",
+      from: { path: "^src/components/ar-scene/|^src/app/viewing/" },
+      to: { path: "node_modules/(gps-plus-slam-osm|h3-js)/" },
     },
 
     // Catch typos in import paths (unresolvable specifiers)

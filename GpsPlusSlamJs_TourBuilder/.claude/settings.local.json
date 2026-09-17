@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//e/Dokumente/Studium/Lab/location-based-webxr/plans/**)",
+      "Read(//e/Dokumente/Studium/Lab/location-based-webxr/**)"
+    ]
+  }
+}

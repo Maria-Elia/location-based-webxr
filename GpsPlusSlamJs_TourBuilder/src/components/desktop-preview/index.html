@@ -5,6 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>gps-plus-slam — desktop preview (Component 11)</title>
     <link rel="stylesheet" href="../shared/demo.css" />
+    <link rel="stylesheet" href="../shared/hud.css" />
+    <!-- `.map-card`'s own look (size, border, Leaflet popup skin) — shared
+         with the authoring demo/composed app rather than duplicated here,
+         same reasoning as authoring-view.css's own header comment. -->
+    <link rel="stylesheet" href="../authoring/view/authoring-view.css" />
     <style>
       #canvas-root canvas {
         display: block;
@@ -17,71 +22,43 @@
         cursor: grabbing;
       }
 
-      #intro {
+      .preview-attribution {
+        position: absolute;
+        left: 8px;
+        top: 8px;
+        z-index: 1;
+        padding: 2px 6px;
+        font-size: 0.7rem;
+        color: rgb(255 255 255 / 80%);
+        background: rgb(0 0 0 / 35%);
+        border-radius: 3px;
+        pointer-events: none;
+      }
+
+      /* Same floating top-right placement as the composed app's in-session
+         map (app.css's `.ar-container > .map-card`) — clear of the HUD,
+         which anchors the bottom edge. Fixed size, not the app's fluid
+         `clamp()`: this demo targets desktop only, no phone breakpoint. */
+      #canvas-root > .map-card {
         position: absolute;
         top: 12px;
-        left: 12px;
-        margin: 0;
-        padding: 12px 14px;
-        max-width: 340px;
-        background: rgb(0 0 0 / 55%);
-        border: 1px solid #2a3550;
-        border-radius: 10px;
-        font-size: 13px;
-        line-height: 1.5;
-      }
-
-      #intro h1 {
-        margin: 0 0 6px;
-        font-size: 15px;
-      }
-
-      #intro p {
-        margin: 0;
-      }
-
-      #controls {
-        position: absolute;
-        left: 12px;
-        bottom: 12px;
-        display: flex;
-        gap: 10px;
-        padding: 10px 12px;
-        background: rgb(0 0 0 / 60%);
-        border: 1px solid #2a3550;
-        border-radius: 10px;
-        font-size: 13px;
-      }
-
-      #controls button {
-        font: inherit;
-        font-size: 13px;
-        color: #e9eef7;
-        background: rgb(79 140 255 / 18%);
-        border: 1px solid #3d5488;
-        border-radius: 8px;
-        padding: 6px 12px;
-        cursor: pointer;
+        right: 12px;
+        z-index: 6;
+        width: 200px;
+        height: 200px;
       }
     </style>
   </head>
   <body>
-    <div id="canvas-root"></div>
-
-    <section id="intro">
+    <header class="page-header">
       <h1>Desktop preview</h1>
-      <p>
+      <p class="lead">
         Walks a real tour with no phone, GPS, or WebXR. Component 8's AR viewing
         scene runs unchanged inside a stand-in for the AR session.
       </p>
-    </section>
+    </header>
 
-    <div id="controls">
-      <button id="start" type="button">▶ Start</button>
-      <button id="autopilot" type="button">Auto-walk</button>
-    </div>
-
-    <p id="status"></p>
+    <div id="canvas-root"></div>
 
     <script type="module" src="./demo.ts"></script>
   </body>

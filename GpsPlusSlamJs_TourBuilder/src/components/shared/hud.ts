@@ -6,8 +6,11 @@
  * the alignment/tracking coaching line, and a one-shot notice channel for
  * things the visitor must be told (audio blocked, map tiles unavailable).
  *
- * Knows nothing about the store or the scene — `viewing-app.ts` pushes text
- * in and reacts to the callbacks.
+ * Knows nothing about the store or the scene — the caller (`viewing-app.ts`,
+ * or the desktop-preview demo) pushes text in and reacts to the callbacks.
+ * Shared under `components/` rather than `app/viewing/` because the
+ * standalone desktop-preview demo (component 11) mounts the same HUD, and a
+ * component may not import from `src/app/` (dependency-cruiser).
  */
 
 /** How long the autopilot hint stays up before it dismisses itself. */
@@ -19,10 +22,14 @@ const DOWN_ARROW_SVG =
   '<svg width="14" height="14" viewBox="0 0 12 12"><path d="M2 4 L6 9 L10 4" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
 export interface HudOptions {
-  readonly onToggleMap: () => void;
-  readonly onEndTour: () => void;
+  /** No map toggle button unless a handler is given (e.g. the desktop-preview demo has no map). */
+  readonly onToggleMap?: () => void;
+  /** No End-tour button unless a handler is given. */
+  readonly onEndTour?: () => void;
   /** Preview mode only: walk the breadcrumb automatically (VC25). */
   readonly onToggleAutopilot?: () => void;
+  /** Desktop-preview only: toggle the OSM building layer on/off. */
+  readonly onToggleOsmBuildings?: () => void;
 }
 
 export interface Hud {
@@ -30,9 +37,12 @@ export interface Hud {
   setStatus(message: string): void;
   /** One-shot notice: audio blocked, tiles offline, a failed asset. */
   showNotice(message: string): void;
+  /** No-op unless the HUD was mounted with a map toggle. */
   setMapToggleLabel(label: string): void;
   /** No-op unless the HUD was mounted with an autopilot toggle. */
   setAutopilotLabel(label: string): void;
+  /** No-op unless the HUD was mounted with an OSM buildings toggle. */
+  setOsmBuildingsLabel(label: string): void;
   /** Hides the one-time "try Auto-walk" callout, if it's still showing.
    *  No-op once already dismissed or when there's no autopilot toggle. */
   dismissAutopilotHint(): void;
@@ -60,12 +70,16 @@ export function mountHud(container: HTMLElement, options: HudOptions): Hud {
   const mapToggle = document.createElement("button");
   mapToggle.textContent = "Map";
   mapToggle.dataset.testid = "viewing-map-toggle";
-  mapToggle.addEventListener("click", () => options.onToggleMap());
+  if (options.onToggleMap) {
+    mapToggle.addEventListener("click", () => options.onToggleMap?.());
+  }
 
   const endTour = document.createElement("button");
   endTour.textContent = "End tour";
   endTour.dataset.testid = "viewing-end-tour";
-  endTour.addEventListener("click", () => options.onEndTour());
+  if (options.onEndTour) {
+    endTour.addEventListener("click", () => options.onEndTour?.());
+  }
 
   const autopilot = document.createElement("button");
   autopilot.textContent = "Auto-walk";
@@ -115,7 +129,18 @@ export function mountHud(container: HTMLElement, options: HudOptions): Hud {
     controls.appendChild(autopilotWrap);
   }
 
-  controls.append(mapToggle, endTour);
+  const osmBuildingsToggle = document.createElement("button");
+  osmBuildingsToggle.textContent = "Buildings";
+  osmBuildingsToggle.dataset.testid = "viewing-osm-buildings-toggle";
+  if (options.onToggleOsmBuildings) {
+    osmBuildingsToggle.addEventListener("click", () =>
+      options.onToggleOsmBuildings?.(),
+    );
+    controls.appendChild(osmBuildingsToggle);
+  }
+
+  if (options.onToggleMap) controls.appendChild(mapToggle);
+  if (options.onEndTour) controls.appendChild(endTour);
   element.append(status, notice, controls);
   container.appendChild(element);
 
@@ -129,10 +154,15 @@ export function mountHud(container: HTMLElement, options: HudOptions): Hud {
       notice.hidden = false;
     },
     setMapToggleLabel(label) {
+      if (!options.onToggleMap) return;
       mapToggle.textContent = label;
     },
     setAutopilotLabel(label) {
       autopilot.textContent = label;
+    },
+    setOsmBuildingsLabel(label) {
+      if (!options.onToggleOsmBuildings) return;
+      osmBuildingsToggle.textContent = label;
     },
     dismissAutopilotHint() {
       hideAutopilotHint?.();

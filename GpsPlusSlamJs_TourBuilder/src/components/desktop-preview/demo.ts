@@ -7,22 +7,38 @@
  * proximity, asset loading, the transcript and the spatialised audio are all
  * the production code paths.
  *
- * Verify: walk with W A S D (shift to run), drag to look around; the knight
- * appears as you come within its active radius and its story plays; clicking
- * it toggles playback; "Auto-walk" follows the breadcrumb by itself.
+ * Verify: click anywhere (or press a key) to unblock audio, then walk with
+ * W A S D (shift to run), drag to look around; the knight appears as you
+ * come within its active radius and its story plays; clicking it toggles
+ * playback. The HUD's Auto-walk button follows the breadcrumb by itself,
+ * Buildings toggles the real OSM building layer, and Map toggles the
+ * floating 2D overview (component 7), tracking position and visited stops.
  */
 
 import { AudioListener } from "three";
+import "leaflet/dist/leaflet.css";
+
+import { buildMapData } from "gps-plus-slam-app-framework/visualization/map-data";
 
 import { createViewingStore } from "../../store/viewing-store.js";
 import { loadTour } from "../../store/tour-slice.js";
+import {
+  selectOrderedWaypoints,
+  selectNextUnvisitedWaypoint,
+  selectVisitedWaypointIds,
+} from "../../store/selectors.js";
 import type { AssetId, AssetProvider, Tour } from "../../store/types.js";
 import { RefCountedAssetProvider } from "../cloud-loader/core/asset-provider.js";
 import { createTourScene } from "../ar-scene/runtime/tour-scene.js";
 import { createThreeSceneAdapter } from "../ar-scene/view/three-scene-adapter.js";
 import { TRAIL_ORB_POOL_SIZE } from "../ar-scene/config.js";
+import { createTourMap } from "../map/view/tour-map.js";
+import { computeMarkerViewModels } from "../map/core/map-marker-state.js";
+import { mountHud } from "../shared/hud.js";
+import type { Hud } from "../shared/hud.js";
 import { computePreviewStart } from "./core/preview-start.js";
 import { createPreviewSession } from "./view/preview-session.js";
+import type { OsmBuildingStatus } from "./view/osm-building-layer.js";
 
 const HYSTERESIS_FRACTION = 0.15; // contract D16 default
 
@@ -83,10 +99,36 @@ const tour: Tour = {
 };
 
 const container = document.querySelector<HTMLDivElement>("#canvas-root")!;
-const status = document.querySelector<HTMLElement>("#status")!;
-const startButton = document.querySelector<HTMLButtonElement>("#start")!;
-const autopilotButton =
-  document.querySelector<HTMLButtonElement>("#autopilot")!;
+
+/**
+ * A touch-primary device (no physical keyboard/mouse) — the desktop
+ * preview's manual walk needs both, so this decides which status hint to
+ * show. `maxTouchPoints` alone would also match a touch-enabled laptop that
+ * still has a keyboard; requiring "no hover" too excludes that case.
+ * Mirrors `viewing-app.ts`'s `isTouchPrimaryDevice` — kept local since a
+ * component may not import from `src/app/`.
+ */
+function isTouchPrimaryDevice(): boolean {
+  if (typeof navigator === "undefined") return false;
+  if (navigator.maxTouchPoints <= 0) return false;
+  if (typeof globalThis.matchMedia !== "function") return true;
+  return !globalThis.matchMedia("(hover: hover)").matches;
+}
+
+/** Mirrors `viewing-app.ts`'s `osmBuildingsLabel` — kept local since a
+ *  component may not import from `src/app/`. */
+function osmBuildingsLabel(buildingStatus: OsmBuildingStatus): string {
+  switch (buildingStatus) {
+    case "off":
+      return "Buildings: Off";
+    case "loaded":
+      return "Buildings: On";
+    case "failed":
+      return "Buildings: Failed (tap to retry)";
+    default:
+      return "Buildings: Loading…";
+  }
+}
 
 const assetProvider: AssetProvider = new RefCountedAssetProvider({
   loadAssetBlob: async (id: AssetId) => {
@@ -103,6 +145,40 @@ const assetProvider: AssetProvider = new RefCountedAssetProvider({
 // before any call into its math (computePreviewStart -> toWorld).
 const store = createViewingStore();
 
+// Forward-declared: the map's onTileError and the session's onPositionChange
+// both close over `hud`/`map` before either is actually mounted below —
+// mirrors viewing-app.ts's own module-scope `let hud`/`let map`.
+let hud: Hud | null = null;
+
+// Attached to the DOM BEFORE `createTourMap` — Leaflet measures the
+// container's real box at construction, and a detached (0×0) element leaves
+// its view permanently wrong even after a later `resize()`/`invalidateSize()`.
+// Mirrors `viewing-app.ts`'s own comment: "mapHost is now parented at its
+// final layout position — only now does Leaflet's size measurement give a
+// real box."
+const mapHost = document.createElement("div");
+mapHost.className = "map-card";
+container.appendChild(mapHost);
+const map = createTourMap(mapHost, {
+  onTileError: () => {
+    hud?.showNotice(
+      "Map tiles are unavailable offline — stops and your position still work.",
+    );
+  },
+});
+let mapVisible = true;
+
+function refreshMapMarkers(): void {
+  const state = store.getState();
+  map?.setWaypoints(
+    computeMarkerViewModels(
+      selectOrderedWaypoints(state),
+      [...selectVisitedWaypointIds(state)],
+      selectNextUnvisitedWaypoint(state)?.id ?? null,
+    ),
+  );
+}
+
 const { origin, start, route } = computePreviewStart(tour);
 const session = createPreviewSession({
   container,
@@ -110,13 +186,52 @@ const session = createPreviewSession({
   start,
   route,
   onPositionChange: (position) => {
-    status.textContent = `${position.lat.toFixed(6)}, ${position.lon.toFixed(6)}`;
+    map?.setGpsPosition(position.lat, position.lon);
+    map?.render(
+      buildMapData({ userPosition: { lat: position.lat, lng: position.lon } }),
+    );
   },
 });
 
 const camera = session.runtime.getCamera()!;
 const audioListener = new AudioListener();
 camera.add(audioListener);
+
+// The same control bar the composed app mounts (component 11's own scope,
+// per plans/2026-09-17-osm-buildings-ui-plan.md, only excluded the
+// end-tour concept this single-page demo has no use for).
+hud = mountHud(container, {
+  onToggleMap: () => {
+    mapVisible = !mapVisible;
+    if (mapVisible) {
+      map?.show();
+      map?.resize();
+    } else {
+      map?.hide();
+    }
+  },
+  onToggleAutopilot: () => {
+    const next = !session.isAutopilot();
+    session.setAutopilot(next);
+    hud?.setAutopilotLabel(next ? "Stop auto-walk" : "Auto-walk");
+    hud?.dismissAutopilotHint();
+  },
+  onToggleOsmBuildings: () => {
+    const buildingStatus = session.getOsmBuildingsStatus();
+    session.setOsmBuildingsEnabled(
+      buildingStatus === "off" || buildingStatus === "failed",
+    );
+  },
+});
+session.onOsmBuildingsStatusChange((buildingStatus) => {
+  hud?.setOsmBuildingsLabel(osmBuildingsLabel(buildingStatus));
+});
+hud.setOsmBuildingsLabel(osmBuildingsLabel(session.getOsmBuildingsStatus()));
+
+// mapHost was already attached (above, before `createTourMap`) — just
+// unhide it now that the rest of the session furniture exists.
+map?.show();
+map?.resize();
 
 const adapter = createThreeSceneAdapter({
   parent: session.runtime.getArWorldGroup()!,
@@ -136,7 +251,7 @@ const tourScene = createTourScene({
   assetProvider,
   hysteresisFraction: HYSTERESIS_FRACTION,
   onAudioBlocked: () => {
-    status.textContent = "Audio is blocked — press Start first.";
+    hud?.showNotice("Audio is blocked — click the scene or press a key.");
   },
   // The demo is a diagnosis tool: surface scene warnings where you can see them.
   // eslint-disable-next-line no-console
@@ -144,22 +259,34 @@ const tourScene = createTourScene({
 });
 
 store.dispatch(loadTour(tour));
+refreshMapMarkers();
+let lastVisited = selectVisitedWaypointIds(store.getState());
+store.subscribe(() => {
+  const visited = selectVisitedWaypointIds(store.getState());
+  if (visited === lastVisited) return;
+  lastVisited = visited;
+  refreshMapMarkers();
+});
+
 session.runtime.registerFrameUpdate((dt) => {
   tourScene.tick(dt);
 });
 
-startButton.addEventListener("click", () => {
-  // The click is the user gesture the Web Audio autoplay policy demands
-  // (§2.5.7); the composed app gets it from the onboarding gate instead.
+// The composed app gets its Web Audio autoplay-unlock gesture (§2.5.7) from
+// the onboarding gate; this single-page demo has none, so the first click or
+// keypress anywhere stands in for it.
+function unlockAudio(): void {
   void audioListener.context.resume();
-  startButton.disabled = true;
-  status.textContent = "Walk with W A S D · shift to run · drag to look";
-});
+  window.removeEventListener("pointerdown", unlockAudio);
+  window.removeEventListener("keydown", unlockAudio);
+}
+window.addEventListener("pointerdown", unlockAudio);
+window.addEventListener("keydown", unlockAudio);
 
-autopilotButton.addEventListener("click", () => {
-  const next = !session.isAutopilot();
-  session.setAutopilot(next);
-  autopilotButton.textContent = next ? "Stop auto-walk" : "Auto-walk";
-});
-
-status.textContent = "Press Start, then walk with W A S D.";
+// Exact copy the composed app's own desktop preview shows (viewing-app.ts's
+// `enterPreview`), so the two render identically.
+hud.setStatus(
+  isTouchPrimaryDevice()
+    ? "Preview — drag to look around, tap a stop to hear it. Tap Auto-walk below to walk the route."
+    : "Preview — walk with W A S D, drag to look around, click a stop to hear it.",
+);

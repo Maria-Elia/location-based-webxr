@@ -18,19 +18,55 @@ describe("mountHud", () => {
     container.remove();
   });
 
-  function setup(withAutopilot = true) {
+  function setup(
+    withAutopilot = true,
+    options: {
+      withOsmBuildings?: boolean;
+      withMap?: boolean;
+      withEndTour?: boolean;
+    } = {},
+  ) {
+    const { withOsmBuildings, withMap = true, withEndTour = true } = options;
     container = document.createElement("div");
     document.body.append(container);
     const onToggleMap = vi.fn();
     const onEndTour = vi.fn();
     const onToggleAutopilot = vi.fn();
+    const onToggleOsmBuildings = vi.fn();
     const hud = mountHud(container, {
+      ...(withMap ? { onToggleMap } : {}),
+      ...(withEndTour ? { onEndTour } : {}),
+      ...(withAutopilot ? { onToggleAutopilot } : {}),
+      ...(withOsmBuildings ? { onToggleOsmBuildings } : {}),
+    });
+    return {
+      hud,
       onToggleMap,
       onEndTour,
-      ...(withAutopilot ? { onToggleAutopilot } : {}),
-    });
-    return { hud, onToggleMap, onEndTour, onToggleAutopilot };
+      onToggleAutopilot,
+      onToggleOsmBuildings,
+    };
   }
+
+  it("renders no map/end-tour buttons when their handlers are omitted", () => {
+    setup(true, { withMap: false, withEndTour: false });
+    expect(query(container, "viewing-map-toggle")).toBeNull();
+    expect(query(container, "viewing-end-tour")).toBeNull();
+  });
+
+  it("clicking Map/End tour calls their handlers when given", () => {
+    const { onToggleMap, onEndTour } = setup();
+    query(container, "viewing-map-toggle")!.click();
+    query(container, "viewing-end-tour")!.click();
+    expect(onToggleMap).toHaveBeenCalledOnce();
+    expect(onEndTour).toHaveBeenCalledOnce();
+  });
+
+  it("setMapToggleLabel is a harmless no-op without a map toggle", () => {
+    const { hud } = setup(true, { withMap: false });
+    expect(() => hud.setMapToggleLabel("x")).not.toThrow();
+    expect(query(container, "viewing-map-toggle")).toBeNull();
+  });
 
   it("renders no autopilot button or hint when onToggleAutopilot is omitted", () => {
     setup(false);
@@ -126,5 +162,34 @@ describe("mountHud", () => {
     expect(query(container, "viewing-hud")).not.toBeNull();
     hud.destroy();
     expect(query(container, "viewing-hud")).toBeNull();
+  });
+
+  it("renders no buildings button when onToggleOsmBuildings is omitted", () => {
+    setup();
+    expect(query(container, "viewing-osm-buildings-toggle")).toBeNull();
+  });
+
+  it("renders a Buildings button, defaulting to that label, when onToggleOsmBuildings is given", () => {
+    setup(true, { withOsmBuildings: true });
+    const button = query(container, "viewing-osm-buildings-toggle");
+    expect(button).not.toBeNull();
+    expect(button!.textContent).toBe("Buildings");
+  });
+
+  it("clicking the buildings button calls onToggleOsmBuildings", () => {
+    const { onToggleOsmBuildings } = setup(true, { withOsmBuildings: true });
+    query(container, "viewing-osm-buildings-toggle")!.click();
+    expect(onToggleOsmBuildings).toHaveBeenCalledOnce();
+  });
+
+  it("setOsmBuildingsLabel updates the button's text, and is a no-op without the toggle", () => {
+    const { hud } = setup(true, { withOsmBuildings: true });
+    hud.setOsmBuildingsLabel("Buildings: On");
+    expect(query(container, "viewing-osm-buildings-toggle")!.textContent).toBe(
+      "Buildings: On",
+    );
+
+    const { hud: hudNoToggle } = setup(true, { withOsmBuildings: false });
+    expect(() => hudNoToggle.setOsmBuildingsLabel("x")).not.toThrow();
   });
 });

@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\('deps',JSON.stringify\\(p.dependencies\\)\\); console.log\\('EXPORTS:'\\); console.log\\(Object.keys\\(p.exports||{}\\).filter\\(k=>k.includes\\('storage'\\)||k.includes\\('state'\\)\\).join\\('\\\\n'\\)\\)\")",
+      "Bash(cat vitest.config.*)",
+      "Bash(cat config/vitest.config.*)",
+      "Bash(cat tsconfig.vitest.json)",
+      "Bash(pnpm install *)",
+      "PowerShell(pnpm install *)",
+      "Bash(mv components/proximity ../_prox_tmp)",
+      "Bash(pnpm run *)",
+      "Bash(pnpm exec *)",
+      "Bash(xargs wc -l)",
+      "PowerShell(pnpm exec *)",
+      "PowerShell(pnpm *)"
+    ]
+  }
+}

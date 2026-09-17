@@ -1,10 +1,24 @@
 /** @vitest-environment jsdom */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { Group } from "three";
+import { OSM_ATTRIBUTION } from "gps-plus-slam-osm";
 import { createPreviewSession } from "./preview-session.js";
 import type { PreviewSessionOptions } from "./preview-session.js";
+import type {
+  OsmBuildingLayer,
+  OsmBuildingLayerOptions,
+  OsmBuildingStatus,
+} from "./osm-building-layer.js";
 import type { WalkInput } from "../core/walk-simulator.js";
 
 const ORIGIN = { lat: 48.137, lon: 11.575 };
+
+const createOsmBuildingLayerMock =
+  vi.fn<(options: OsmBuildingLayerOptions) => OsmBuildingLayer>();
+vi.mock("./osm-building-layer.js", () => ({
+  createOsmBuildingLayer: (options: OsmBuildingLayerOptions) =>
+    createOsmBuildingLayerMock(options),
+}));
 
 function fakeRenderer() {
   const domElement = document.createElement("canvas");
@@ -46,6 +60,21 @@ function stubControls(input: WalkInput, yawDeltaRad = 0) {
   };
 }
 
+/**
+ * Never touches the network: real desktop previews use a live
+ * `OverpassSource` (see osm-building-layer.ts), which these tests must not.
+ */
+function fakeOsmBuildings(): OsmBuildingLayer {
+  return {
+    group: new Group(),
+    load: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
+    dispose: vi.fn<() => void>(),
+    getStatus: vi.fn<() => OsmBuildingStatus>(() => "idle"),
+    onStatusChange: vi.fn(() => vi.fn()),
+    setEnabled: vi.fn(),
+  };
+}
+
 let container: HTMLElement;
 
 function session(overrides: Partial<PreviewSessionOptions> = {}) {
@@ -59,6 +88,7 @@ function session(overrides: Partial<PreviewSessionOptions> = {}) {
     raf: clock.raf,
     cancelRaf: clock.cancel,
     controls: stubControls({ forward: 0, strafe: 0, turn: 0 }),
+    osmBuildings: fakeOsmBuildings(),
     ...overrides,
   });
   return { instance, clock, renderer };
@@ -171,6 +201,67 @@ describe("preview session", () => {
       5,
     );
     expect(instance.seams.toWorld(ORIGIN)!.x).toBeCloseTo(0, 3);
+
+    instance.dispose();
+  });
+
+  it("loads the OSM building layer into the scene and disposes it on teardown", () => {
+    const osmBuildings = fakeOsmBuildings();
+    const { instance } = session({ osmBuildings });
+
+    expect(osmBuildings.load).toHaveBeenCalledTimes(1);
+    expect(osmBuildings.dispose).not.toHaveBeenCalled();
+
+    instance.dispose();
+
+    expect(osmBuildings.dispose).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows the OSM attribution line for as long as the session is open", () => {
+    const { instance } = session();
+
+    const attribution = container.querySelector(".preview-attribution");
+    expect(attribution?.textContent).toBe(OSM_ATTRIBUTION);
+
+    instance.dispose();
+
+    expect(container.querySelector(".preview-attribution")).toBeNull();
+  });
+
+  it("forwards osmBuildingsEnabled to createOsmBuildingLayer when no test double is given", () => {
+    createOsmBuildingLayerMock.mockReturnValueOnce(fakeOsmBuildings());
+    const clock = fakeClock();
+    const renderer = fakeRenderer();
+    const instance = createPreviewSession({
+      container,
+      origin: ORIGIN,
+      createRenderer: () => renderer,
+      now: clock.now,
+      raf: clock.raf,
+      cancelRaf: clock.cancel,
+      controls: stubControls({ forward: 0, strafe: 0, turn: 0 }),
+      osmBuildingsEnabled: false,
+    });
+
+    expect(createOsmBuildingLayerMock).toHaveBeenCalledWith(
+      expect.objectContaining({ enabled: false }),
+    );
+    instance.dispose();
+  });
+
+  it("delegates the OSM buildings status/enable methods to the underlying layer", () => {
+    const osmBuildings = fakeOsmBuildings();
+    const { instance } = session({ osmBuildings });
+
+    instance.getOsmBuildingsStatus();
+    expect(osmBuildings.getStatus).toHaveBeenCalled();
+
+    const cb = vi.fn();
+    instance.onOsmBuildingsStatusChange(cb);
+    expect(osmBuildings.onStatusChange).toHaveBeenCalledWith(cb);
+
+    instance.setOsmBuildingsEnabled(false);
+    expect(osmBuildings.setEnabled).toHaveBeenCalledWith(false);
 
     instance.dispose();
   });
