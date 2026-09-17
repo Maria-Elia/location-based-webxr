@@ -87,6 +87,13 @@ export function createPreviewControls(
   // A tab switch mid-stride would otherwise leave the walker running forever.
   const onBlur = (): void => held.clear();
 
+  // A touch never fires mouse events on its own, so drag-to-look needs its
+  // own touch handlers — mirroring the mouse ones — to work on a phone.
+  const touchPoint = (event: TouchEvent): { x: number; y: number } | null => {
+    const touch = event.touches[0] ?? event.changedTouches[0];
+    return touch ? { x: touch.clientX, y: touch.clientY } : null;
+  };
+
   const onPointerDown = (event: Event): void => {
     dragging = true;
     lastX = (event as MouseEvent).clientX;
@@ -104,6 +111,28 @@ export function createPreviewControls(
     dragging = false;
   };
 
+  const onTouchStart = (event: Event): void => {
+    const point = touchPoint(event as TouchEvent);
+    if (!point) return;
+    dragging = true;
+    lastX = point.x;
+    lastY = point.y;
+    event.preventDefault();
+  };
+  const onTouchMove = (event: Event): void => {
+    if (!dragging) return;
+    const point = touchPoint(event as TouchEvent);
+    if (!point) return;
+    yawDelta += (point.x - lastX) * sensitivity;
+    pitchDelta -= (point.y - lastY) * sensitivity;
+    lastX = point.x;
+    lastY = point.y;
+    event.preventDefault();
+  };
+  const onTouchEnd = (): void => {
+    dragging = false;
+  };
+
   options.keyTarget.addEventListener("keydown", onKeyDown);
   options.keyTarget.addEventListener("keyup", onKeyUp);
   options.keyTarget.addEventListener("blur", onBlur);
@@ -111,6 +140,14 @@ export function createPreviewControls(
   options.pointerTarget.addEventListener("mousemove", onPointerMove);
   options.pointerTarget.addEventListener("mouseup", onPointerUp);
   options.pointerTarget.addEventListener("mouseleave", onPointerUp);
+  options.pointerTarget.addEventListener("touchstart", onTouchStart, {
+    passive: false,
+  });
+  options.pointerTarget.addEventListener("touchmove", onTouchMove, {
+    passive: false,
+  });
+  options.pointerTarget.addEventListener("touchend", onTouchEnd);
+  options.pointerTarget.addEventListener("touchcancel", onTouchEnd);
 
   return {
     sample() {
@@ -137,6 +174,10 @@ export function createPreviewControls(
       options.pointerTarget.removeEventListener("mousemove", onPointerMove);
       options.pointerTarget.removeEventListener("mouseup", onPointerUp);
       options.pointerTarget.removeEventListener("mouseleave", onPointerUp);
+      options.pointerTarget.removeEventListener("touchstart", onTouchStart);
+      options.pointerTarget.removeEventListener("touchmove", onTouchMove);
+      options.pointerTarget.removeEventListener("touchend", onTouchEnd);
+      options.pointerTarget.removeEventListener("touchcancel", onTouchEnd);
     },
   };
 }

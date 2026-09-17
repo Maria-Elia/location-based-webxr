@@ -91,6 +91,41 @@ describe("preview controls", () => {
     controls.dispose();
   });
 
+  it("turns the view by a touch drag, and only while dragging", () => {
+    const controls = createPreviewControls({
+      keyTarget,
+      pointerTarget,
+      lookSensitivityRadPerPx: 0.01,
+    });
+
+    const touchStart = new TouchEvent("touchstart", {
+      touches: [{ clientX: 100, clientY: 0 } as Touch],
+      bubbles: true,
+    });
+    pointerTarget.dispatchEvent(touchStart);
+
+    const touchMove = new TouchEvent("touchmove", {
+      touches: [{ clientX: 130, clientY: 0 } as Touch],
+      bubbles: true,
+    });
+    pointerTarget.dispatchEvent(touchMove);
+    expect(controls.sample().yawDeltaRad).toBeCloseTo(0.3, 5);
+
+    const touchEnd = new TouchEvent("touchend", {
+      changedTouches: [{ clientX: 130, clientY: 0 } as Touch],
+      bubbles: true,
+    });
+    pointerTarget.dispatchEvent(touchEnd);
+
+    const touchMoveAfterEnd = new TouchEvent("touchmove", {
+      touches: [{ clientX: 200, clientY: 0 } as Touch],
+      bubbles: true,
+    });
+    pointerTarget.dispatchEvent(touchMoveAfterEnd);
+    expect(controls.sample().yawDeltaRad).toBe(0);
+    controls.dispose();
+  });
+
   it("stops responding once disposed", () => {
     const controls = createPreviewControls({ keyTarget, pointerTarget });
     controls.dispose();
