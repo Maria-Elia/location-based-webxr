@@ -18,18 +18,29 @@ describe("mountHud", () => {
     container.remove();
   });
 
-  function setup(withAutopilot = true) {
+  function setup(
+    withAutopilot = true,
+    options: { withOsmBuildings?: boolean } = {},
+  ) {
     container = document.createElement("div");
     document.body.append(container);
     const onToggleMap = vi.fn();
     const onEndTour = vi.fn();
     const onToggleAutopilot = vi.fn();
+    const onToggleOsmBuildings = vi.fn();
     const hud = mountHud(container, {
       onToggleMap,
       onEndTour,
       ...(withAutopilot ? { onToggleAutopilot } : {}),
+      ...(options.withOsmBuildings ? { onToggleOsmBuildings } : {}),
     });
-    return { hud, onToggleMap, onEndTour, onToggleAutopilot };
+    return {
+      hud,
+      onToggleMap,
+      onEndTour,
+      onToggleAutopilot,
+      onToggleOsmBuildings,
+    };
   }
 
   it("renders no autopilot button or hint when onToggleAutopilot is omitted", () => {
@@ -126,5 +137,34 @@ describe("mountHud", () => {
     expect(query(container, "viewing-hud")).not.toBeNull();
     hud.destroy();
     expect(query(container, "viewing-hud")).toBeNull();
+  });
+
+  it("renders no buildings button when onToggleOsmBuildings is omitted", () => {
+    setup();
+    expect(query(container, "viewing-osm-buildings-toggle")).toBeNull();
+  });
+
+  it("renders a Buildings button, defaulting to that label, when onToggleOsmBuildings is given", () => {
+    setup(true, { withOsmBuildings: true });
+    const button = query(container, "viewing-osm-buildings-toggle");
+    expect(button).not.toBeNull();
+    expect(button!.textContent).toBe("Buildings");
+  });
+
+  it("clicking the buildings button calls onToggleOsmBuildings", () => {
+    const { onToggleOsmBuildings } = setup(true, { withOsmBuildings: true });
+    query(container, "viewing-osm-buildings-toggle")!.click();
+    expect(onToggleOsmBuildings).toHaveBeenCalledOnce();
+  });
+
+  it("setOsmBuildingsLabel updates the button's text, and is a no-op without the toggle", () => {
+    const { hud } = setup(true, { withOsmBuildings: true });
+    hud.setOsmBuildingsLabel("Buildings: On");
+    expect(query(container, "viewing-osm-buildings-toggle")!.textContent).toBe(
+      "Buildings: On",
+    );
+
+    const { hud: hudNoToggle } = setup(true, { withOsmBuildings: false });
+    expect(() => hudNoToggle.setOsmBuildingsLabel("x")).not.toThrow();
   });
 });

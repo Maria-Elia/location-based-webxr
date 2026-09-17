@@ -54,6 +54,7 @@ import { createPreviewSeams, type PreviewSeams } from "./preview-seams.js";
 import {
   createOsmBuildingLayer,
   type OsmBuildingLayer,
+  type OsmBuildingStatus,
 } from "./osm-building-layer.js";
 import { OSM_ATTRIBUTION } from "gps-plus-slam-osm";
 
@@ -110,6 +111,8 @@ export interface PreviewSessionOptions {
    * once, around the tour's origin, and fails soft to the flat plane.
    */
   readonly osmBuildings?: OsmBuildingLayer;
+  /** Forwarded to `createOsmBuildingLayer`'s `enabled` option. Default `true`. */
+  readonly osmBuildingsEnabled?: boolean;
 }
 
 export interface PreviewSession {
@@ -123,6 +126,11 @@ export interface PreviewSession {
   /** Walk the tour's breadcrumb automatically instead of by keyboard. */
   setAutopilot(enabled: boolean): void;
   isAutopilot(): boolean;
+  getOsmBuildingsStatus(): OsmBuildingStatus;
+  onOsmBuildingsStatusChange(
+    callback: (status: OsmBuildingStatus) => void,
+  ): () => void;
+  setOsmBuildingsEnabled(enabled: boolean): void;
   dispose(): void;
 }
 
@@ -131,6 +139,10 @@ const IDENTITY_MATRIX: readonly number[] = [
 ];
 
 const DEFAULT_EYE_HEIGHT_M = 1.6;
+
+function resolveOsmBuildingsEnabled(options: PreviewSessionOptions): boolean {
+  return options.osmBuildingsEnabled ?? true;
+}
 
 /** A daylight sky dome: cheap, and far more legible than a flat clear colour. */
 function createSky(): Mesh {
@@ -245,6 +257,7 @@ export function createPreviewSession(
     createOsmBuildingLayer({
       origin: options.origin,
       ...(options.route ? { route: options.route } : {}),
+      enabled: resolveOsmBuildingsEnabled(options),
     });
   scene.add(osmBuildings.group);
   void osmBuildings.load();
@@ -389,6 +402,10 @@ export function createPreviewSession(
       }
     },
     isAutopilot: () => autopilot,
+    getOsmBuildingsStatus: () => osmBuildings.getStatus(),
+    onOsmBuildingsStatusChange: (callback) =>
+      osmBuildings.onStatusChange(callback),
+    setOsmBuildingsEnabled: (enabled) => osmBuildings.setEnabled(enabled),
     dispose() {
       if (disposed) return;
       disposed = true;

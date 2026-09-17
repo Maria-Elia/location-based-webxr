@@ -23,6 +23,8 @@ export interface HudOptions {
   readonly onEndTour: () => void;
   /** Preview mode only: walk the breadcrumb automatically (VC25). */
   readonly onToggleAutopilot?: () => void;
+  /** Desktop-preview only: toggle the OSM building layer on/off. */
+  readonly onToggleOsmBuildings?: () => void;
 }
 
 export interface Hud {
@@ -33,6 +35,8 @@ export interface Hud {
   setMapToggleLabel(label: string): void;
   /** No-op unless the HUD was mounted with an autopilot toggle. */
   setAutopilotLabel(label: string): void;
+  /** No-op unless the HUD was mounted with an OSM buildings toggle. */
+  setOsmBuildingsLabel(label: string): void;
   /** Hides the one-time "try Auto-walk" callout, if it's still showing.
    *  No-op once already dismissed or when there's no autopilot toggle. */
   dismissAutopilotHint(): void;
@@ -115,6 +119,16 @@ export function mountHud(container: HTMLElement, options: HudOptions): Hud {
     controls.appendChild(autopilotWrap);
   }
 
+  const osmBuildingsToggle = document.createElement("button");
+  osmBuildingsToggle.textContent = "Buildings";
+  osmBuildingsToggle.dataset.testid = "viewing-osm-buildings-toggle";
+  if (options.onToggleOsmBuildings) {
+    osmBuildingsToggle.addEventListener("click", () =>
+      options.onToggleOsmBuildings?.(),
+    );
+    controls.appendChild(osmBuildingsToggle);
+  }
+
   controls.append(mapToggle, endTour);
   element.append(status, notice, controls);
   container.appendChild(element);
@@ -133,6 +147,10 @@ export function mountHud(container: HTMLElement, options: HudOptions): Hud {
     },
     setAutopilotLabel(label) {
       autopilot.textContent = label;
+    },
+    setOsmBuildingsLabel(label) {
+      if (!options.onToggleOsmBuildings) return;
+      osmBuildingsToggle.textContent = label;
     },
     dismissAutopilotHint() {
       hideAutopilotHint?.();

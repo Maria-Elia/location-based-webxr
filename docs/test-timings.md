@@ -4,7 +4,7 @@
 
 ## Latest
 
-Last recorded 2026-09-15T16:03:54.134Z · machine `c7aff3e4 (AMD Ryzen 5 3600 6-Core Processor, 12 threads)` · branch `main` @ `5f61ed9c`
+Last recorded 2026-09-17T07:46:53.122Z · machine `c7aff3e4 (AMD Ryzen 5 3600 6-Core Processor, 12 threads)` · branch `feat/osm-integration` @ `074ad33d`
 
 _Header describes the most recent write only; standalone stage runs update single rows. Median = the stage's same-machine history median. Per-recording provenance lives in the JSON block._
 
@@ -36,7 +36,7 @@ _Values marked * were recorded on a different machine than their series' newest 
 - `test:osm`: 72.2, 75.0, 80.2, 61.9, 72.7, 61.9, 65.4, 67.3, 66.9, 62.6
 - `test:site-worker`: 3.2, 4.1, 4.3, 2.8, 3.3, 3.2, 3.3, 2.8, 3.0, 2.9
 - `test:design-system`: 3.3, 6.2, 3.3, 2.7, 3.3, 2.9, 2.9, 2.6, 2.6, 2.6
-- `check:deadcode`: 3.7, 4.1, 4.4, 3.5, 3.6, 4.6*, 9.3*, 3.6*, 4.1*, 5.6*
+- `check:deadcode`: 3.7, 4.3, 4.7, 3.5, 3.7, 4.1, 4.4, 3.5, 3.6, 4.6*
 - `test:recorder`: 333.4, 360.5, 197.3, 209.7, 211.2, 199.9, 224.4, 251.6, 224.9, 263.6
 - `test:starter`: 45.1, 42.9, 34.7, 36.0, 34.0, 35.9, 37.0, 37.8, 38.2, 46.7
 - `test:example`: 4.4, 4.7, 3.8, 3.9, 4.2, 4.3, 4.2, 4.3, 4.7, 5.0
@@ -51,7 +51,7 @@ _Values marked * were recorded on a different machine than their series' newest 
 ```json
 {
   "version": 1,
-  "meta": {"project":"location-based-webxr","lastWrite":{"ts":"2026-09-15T16:03:54.134Z","machine":"c7aff3e4|AMD-Ryzen-5-3600-6-Core-Processor|12","machineLabel":"c7aff3e4 (AMD Ryzen 5 3600 6-Core Processor, 12 threads)","git":"5f61ed9c","branch":"main"}},
+  "meta": {"project":"location-based-webxr","lastWrite":{"ts":"2026-09-17T07:46:53.122Z","machine":"c7aff3e4|AMD-Ryzen-5-3600-6-Core-Processor|12","machineLabel":"c7aff3e4 (AMD Ryzen 5 3600 6-Core Processor, 12 threads)","git":"074ad33d","branch":"feat/osm-integration"}},
   "stages": {
     "test:repo-config": { "history": [
       {"ts":"2026-09-10T19:21:25.942Z","durationMs":4053,"tests":{"passed":397,"failed":0,"skipped":0,"todo":0},"machine":"f936c64e|11th-Gen-Intel-R-Core-TM-i7-1185G7-3-00G|8","git":"9c0cc53d"},
@@ -198,16 +198,16 @@ _Values marked * were recorded on a different machine than their series' newest 
       {"ts":"2026-09-08T23:54:08.181Z","durationMs":1100789,"tests":null,"machine":"f936c64e|11th-Gen-Intel-R-Core-TM-i7-1185G7-3-00G|8","git":"02e99093"}
     ] },
     "check:deadcode": { "history": [
+      {"ts":"2026-09-17T07:46:53.122Z","durationMs":3688,"tests":null,"machine":"c7aff3e4|AMD-Ryzen-5-3600-6-Core-Processor|12","git":"074ad33d"},
+      {"ts":"2026-09-17T07:45:47.343Z","durationMs":4323,"tests":null,"machine":"c7aff3e4|AMD-Ryzen-5-3600-6-Core-Processor|12","git":"074ad33d"},
+      {"ts":"2026-09-15T18:45:05.868Z","durationMs":4670,"tests":null,"machine":"c7aff3e4|AMD-Ryzen-5-3600-6-Core-Processor|12","git":"f3c5b702"},
+      {"ts":"2026-09-15T17:39:10.187Z","durationMs":3546,"tests":null,"machine":"c7aff3e4|AMD-Ryzen-5-3600-6-Core-Processor|12","git":"60b3beeb"},
       {"ts":"2026-09-15T16:03:54.134Z","durationMs":3679,"tests":null,"machine":"c7aff3e4|AMD-Ryzen-5-3600-6-Core-Processor|12","git":"5f61ed9c"},
       {"ts":"2026-09-15T16:01:38.595Z","durationMs":4082,"tests":null,"machine":"c7aff3e4|AMD-Ryzen-5-3600-6-Core-Processor|12","git":"5f61ed9c"},
       {"ts":"2026-09-15T11:20:08.688Z","durationMs":4382,"tests":null,"machine":"c7aff3e4|AMD-Ryzen-5-3600-6-Core-Processor|12","git":"db6c9d6f"},
       {"ts":"2026-09-15T11:03:47.956Z","durationMs":3503,"tests":null,"machine":"c7aff3e4|AMD-Ryzen-5-3600-6-Core-Processor|12","git":"1c4137d5"},
       {"ts":"2026-09-15T11:02:35.122Z","durationMs":3575,"tests":null,"machine":"c7aff3e4|AMD-Ryzen-5-3600-6-Core-Processor|12","git":"1c4137d5"},
-      {"ts":"2026-09-10T19:24:45.348Z","durationMs":4561,"tests":null,"machine":"f936c64e|11th-Gen-Intel-R-Core-TM-i7-1185G7-3-00G|8","git":"9c0cc53d"},
-      {"ts":"2026-09-10T19:14:07.593Z","durationMs":9255,"tests":null,"machine":"f936c64e|11th-Gen-Intel-R-Core-TM-i7-1185G7-3-00G|8","git":"9c0cc53d"},
-      {"ts":"2026-09-10T18:30:18.126Z","durationMs":3568,"tests":null,"machine":"f936c64e|11th-Gen-Intel-R-Core-TM-i7-1185G7-3-00G|8","git":"0db93d0c"},
-      {"ts":"2026-09-10T17:49:38.187Z","durationMs":4078,"tests":null,"machine":"f936c64e|11th-Gen-Intel-R-Core-TM-i7-1185G7-3-00G|8","git":"880129d3"},
-      {"ts":"2026-09-10T14:15:47.069Z","durationMs":5583,"tests":null,"machine":"f936c64e|11th-Gen-Intel-R-Core-TM-i7-1185G7-3-00G|8","git":"ce39c015"}
+      {"ts":"2026-09-10T19:24:45.348Z","durationMs":4561,"tests":null,"machine":"f936c64e|11th-Gen-Intel-R-Core-TM-i7-1185G7-3-00G|8","git":"9c0cc53d"}
     ] },
     "test:tour": { "history": [
       {"ts":"2026-09-10T19:59:56.177Z","durationMs":88914,"tests":null,"machine":"f936c64e|11th-Gen-Intel-R-Core-TM-i7-1185G7-3-00G|8","git":"9c0cc53d"},

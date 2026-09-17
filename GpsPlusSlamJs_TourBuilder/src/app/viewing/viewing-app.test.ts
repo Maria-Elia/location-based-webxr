@@ -152,8 +152,24 @@ function fakeMap() {
   };
 }
 
-function fakePreviewSession() {
+type FakeOsmBuildingsStatus = "idle" | "loading" | "loaded" | "failed" | "off";
+
+function fakePreviewSession(
+  options: {
+    osmBuildingsStatus?: FakeOsmBuildingsStatus;
+    /** Records "subscribe"/"unsubscribe" and (via `dispose`) "dispose". */
+    callOrder?: string[];
+  } = {},
+) {
   const domElement = document.createElement("canvas");
+  let osmStatus: FakeOsmBuildingsStatus =
+    options.osmBuildingsStatus ?? "loading";
+  const osmListeners = new Set<(status: FakeOsmBuildingsStatus) => void>();
+  const emitOsmStatus = (next: FakeOsmBuildingsStatus): void => {
+    osmStatus = next;
+    for (const listener of [...osmListeners]) listener(next);
+  };
+  const callOrder = options.callOrder;
   return {
     runtime: {
       getArWorldGroup: () => ({}) as never,
@@ -175,9 +191,28 @@ function fakePreviewSession() {
     getPose: () => ({ x: 0, z: 0, headingRad: 0 }),
     setAutopilot: vi.fn(),
     isAutopilot: () => false,
+    getOsmBuildingsStatus: vi.fn(() => osmStatus),
+    onOsmBuildingsStatusChange: vi.fn(
+      (callback: (status: FakeOsmBuildingsStatus) => void) => {
+        osmListeners.add(callback);
+        callOrder?.push("subscribe");
+        return () => {
+          osmListeners.delete(callback);
+          callOrder?.push("unsubscribe");
+        };
+      },
+    ),
+    setOsmBuildingsEnabled: vi.fn((enabled: boolean) => {
+      emitOsmStatus(enabled ? "loading" : "off");
+    }),
+    // Test-only escape hatch to simulate a status arriving asynchronously.
+    _emitOsmStatus: emitOsmStatus,
     // The session owns its canvas and takes it back on dispose, exactly as
     // the real one does.
-    dispose: vi.fn(() => domElement.remove()),
+    dispose: vi.fn(() => {
+      callOrder?.push("dispose");
+      domElement.remove();
+    }),
   };
 }
 
@@ -589,6 +624,160 @@ describe("Viewing mode screen flow", () => {
     });
     report!({ lat: 48.5, lon: 11.5 });
     expect(map.setGpsPosition).toHaveBeenCalledWith(48.5, 11.5);
+  });
+
+  it("shows the OSM buildings toggle in the preview HUD, labelled from the layer's initial status", async () => {
+    const { controller } = fakeController({ status: "unsupported" });
+    const preview = fakePreviewSession({ osmBuildingsStatus: "loading" });
+    const createPreviewSession = vi.fn(() => preview);
+
+    mountViewingApp(root, "https://host.example/tour.zip", {
+      ...testDeps({
+        createPreviewSession:
+          createPreviewSession as unknown as ViewingAppDeps["createPreviewSession"],
+      }),
+      createController: () => controller as never,
+    });
+
+    await vi.waitFor(() => {
+      expect(query(root, "grant-access")).not.toBeNull();
+    });
+    await completeOnboarding(root);
+    query(root, "viewing-enter-preview")!.click();
+
+    await vi.waitFor(() => {
+      expect(query(root, "viewing-osm-buildings-toggle")).not.toBeNull();
+    });
+    // Applied from getOsmBuildingsStatus() immediately, without waiting for
+    // an onOsmBuildingsStatusChange event.
+    expect(query(root, "viewing-osm-buildings-toggle")!.textContent).toBe(
+      "Buildings: Loading…",
+    );
+  });
+
+  it("updates the buildings label as the layer's status changes, and shows a notice on failure", async () => {
+    const { controller } = fakeController({ status: "unsupported" });
+    const preview = fakePreviewSession({ osmBuildingsStatus: "loading" });
+    const createPreviewSession = vi.fn(() => preview);
+
+    mountViewingApp(root, "https://host.example/tour.zip", {
+      ...testDeps({
+        createPreviewSession:
+          createPreviewSession as unknown as ViewingAppDeps["createPreviewSession"],
+      }),
+      createController: () => controller as never,
+    });
+
+    await vi.waitFor(() => {
+      expect(query(root, "grant-access")).not.toBeNull();
+    });
+    await completeOnboarding(root);
+    query(root, "viewing-enter-preview")!.click();
+    await vi.waitFor(() => {
+      expect(query(root, "viewing-osm-buildings-toggle")).not.toBeNull();
+    });
+
+    preview._emitOsmStatus("loaded");
+    expect(query(root, "viewing-osm-buildings-toggle")!.textContent).toBe(
+      "Buildings: On",
+    );
+    expect(query(root, "viewing-hud-notice")!.hidden).toBe(true);
+
+    preview._emitOsmStatus("failed");
+    expect(query(root, "viewing-osm-buildings-toggle")!.textContent).toBe(
+      "Buildings: Failed (tap to retry)",
+    );
+    expect(query(root, "viewing-hud-notice")!.hidden).toBe(false);
+    expect(query(root, "viewing-hud-notice")!.textContent).toBe(
+      "Couldn't load real buildings; showing flat ground.",
+    );
+  });
+
+  it("derives the toggle click's target enabled value from the current status", async () => {
+    const { controller } = fakeController({ status: "unsupported" });
+    const preview = fakePreviewSession({ osmBuildingsStatus: "off" });
+    const createPreviewSession = vi.fn(() => preview);
+
+    mountViewingApp(root, "https://host.example/tour.zip", {
+      ...testDeps({
+        createPreviewSession:
+          createPreviewSession as unknown as ViewingAppDeps["createPreviewSession"],
+      }),
+      createController: () => controller as never,
+    });
+
+    await vi.waitFor(() => {
+      expect(query(root, "grant-access")).not.toBeNull();
+    });
+    await completeOnboarding(root);
+    query(root, "viewing-enter-preview")!.click();
+    await vi.waitFor(() => {
+      expect(query(root, "viewing-osm-buildings-toggle")).not.toBeNull();
+    });
+
+    // Currently "off" -> click enables.
+    (query(root, "viewing-osm-buildings-toggle") as HTMLButtonElement).click();
+    expect(preview.setOsmBuildingsEnabled).toHaveBeenLastCalledWith(true);
+
+    // Now "loading" (setOsmBuildingsEnabled(true) drove the fake to that
+    // status) -> click disables.
+    (query(root, "viewing-osm-buildings-toggle") as HTMLButtonElement).click();
+    expect(preview.setOsmBuildingsEnabled).toHaveBeenLastCalledWith(false);
+
+    // Now "off" again -> click re-enables (also the retry path from "failed").
+    (query(root, "viewing-osm-buildings-toggle") as HTMLButtonElement).click();
+    expect(preview.setOsmBuildingsEnabled).toHaveBeenLastCalledWith(true);
+  });
+
+  it("does not show the buildings toggle in the real AR (phone) HUD", async () => {
+    const { controller } = fakeController();
+
+    mountViewingApp(root, "https://host.example/tour.zip", {
+      ...testDeps(),
+      createController: () => controller as never,
+    });
+
+    await vi.waitFor(() => {
+      expect(query(root, "grant-access")).not.toBeNull();
+    });
+    await completeOnboarding(root);
+    (query(root, "viewing-enter-ar") as HTMLButtonElement).click();
+
+    await vi.waitFor(() => {
+      expect(query(root, "viewing-hud")).not.toBeNull();
+    });
+    expect(query(root, "viewing-osm-buildings-toggle")).toBeNull();
+  });
+
+  it("unsubscribes the OSM buildings status listener before preview.dispose() on leavePreview()", async () => {
+    const { controller } = fakeController({ status: "unsupported" });
+    const callOrder: string[] = [];
+    const preview = fakePreviewSession({ callOrder });
+    const createPreviewSession = vi.fn(() => preview);
+
+    mountViewingApp(root, "https://host.example/tour.zip", {
+      ...testDeps({
+        createPreviewSession:
+          createPreviewSession as unknown as ViewingAppDeps["createPreviewSession"],
+      }),
+      createController: () => controller as never,
+    });
+
+    await vi.waitFor(() => {
+      expect(query(root, "grant-access")).not.toBeNull();
+    });
+    await completeOnboarding(root);
+    query(root, "viewing-enter-preview")!.click();
+    await vi.waitFor(() => {
+      expect(query(root, "viewing-hud")).not.toBeNull();
+    });
+
+    (query(root, "viewing-end-tour") as HTMLButtonElement).click();
+    await vi.waitFor(() => {
+      expect(query(root, "viewing-entry")).not.toBeNull();
+    });
+
+    expect(callOrder).toEqual(["subscribe", "unsubscribe", "dispose"]);
   });
 
   it("clears stored progress on Restart tour", async () => {

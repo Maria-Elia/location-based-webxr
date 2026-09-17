@@ -64,6 +64,7 @@ import type { TourMapInstance } from "../../components/map/view/tour-map.js";
 import { computeMarkerViewModels } from "../../components/map/core/map-marker-state.js";
 import { createPreviewSession } from "../../components/desktop-preview/view/preview-session.js";
 import type { PreviewSession } from "../../components/desktop-preview/view/preview-session.js";
+import type { OsmBuildingStatus } from "../../components/desktop-preview/view/osm-building-layer.js";
 import { computePreviewStart } from "../../components/desktop-preview/core/preview-start.js";
 import { requestWakeLock, type WakeLockHandle } from "../wake-lock.js";
 import {
@@ -194,6 +195,21 @@ function describeLoadFailure(error: unknown): {
  * match a touch-enabled laptop that still has a keyboard; requiring "no
  * hover" too excludes that case.
  */
+/** `viewing-app.ts` computes the label from status; `hud.ts` stays free of the enum. */
+function osmBuildingsLabel(status: OsmBuildingStatus): string {
+  switch (status) {
+    case "off":
+      return "Buildings: Off";
+    case "loaded":
+      return "Buildings: On";
+    case "failed":
+      return "Buildings: Failed (tap to retry)";
+    default:
+      // "idle" is only ever seen momentarily — the session loads straight away.
+      return "Buildings: Loading…";
+  }
+}
+
 function isTouchPrimaryDevice(): boolean {
   if (typeof navigator === "undefined") return false;
   if (navigator.maxTouchPoints <= 0) return false;
@@ -234,6 +250,7 @@ export function mountViewingApp(
   let assetProvider: { release(id: string): void } | null = null;
   let unsubscribeProgress: (() => void) | null = null;
   let unsubscribeTracking: (() => void) | null = null;
+  let unsubscribeOsmBuildings: (() => void) | null = null;
   let mapVisible = false;
   let destroyed = false;
 
@@ -527,6 +544,7 @@ export function mountViewingApp(
   function mountSessionShell(options: {
     onEndTour: () => void;
     onToggleAutopilot?: () => void;
+    onToggleOsmBuildings?: () => void;
   }): void {
     clearScreen();
     hud = mountHud(arHost, {
@@ -542,6 +560,9 @@ export function mountViewingApp(
       onEndTour: options.onEndTour,
       ...(options.onToggleAutopilot
         ? { onToggleAutopilot: options.onToggleAutopilot }
+        : {}),
+      ...(options.onToggleOsmBuildings
+        ? { onToggleOsmBuildings: options.onToggleOsmBuildings }
         : {}),
     });
     arHost.appendChild(mapHost);
@@ -618,6 +639,11 @@ export function mountViewingApp(
         hud?.setAutopilotLabel(next ? "Stop auto-walk" : "Auto-walk");
         hud?.dismissAutopilotHint();
       },
+      onToggleOsmBuildings: () => {
+        if (preview === null) return;
+        const status = preview.getOsmBuildingsStatus();
+        preview.setOsmBuildingsEnabled(status === "off" || status === "failed");
+      },
     });
 
     const session = deps.createPreviewSession({
@@ -637,6 +663,21 @@ export function mountViewingApp(
     preview = session;
     // The canvas must sit UNDER the HUD and the map, which were mounted first.
     arHost.insertBefore(session.domElement, arHost.firstChild);
+
+    // Subscribed right after creation, then immediately applied once: the
+    // session's own load() already ran synchronously inside
+    // createPreviewSession, so the idle -> loading transition has already
+    // happened and onOsmBuildingsStatusChange will not replay it.
+    const applyOsmBuildingsStatus = (status: OsmBuildingStatus): void => {
+      hud?.setOsmBuildingsLabel(osmBuildingsLabel(status));
+      if (status === "failed") {
+        hud?.showNotice("Couldn't load real buildings; showing flat ground.");
+      }
+    };
+    unsubscribeOsmBuildings = session.onOsmBuildingsStatusChange(
+      applyOsmBuildingsStatus,
+    );
+    applyOsmBuildingsStatus(session.getOsmBuildingsStatus());
 
     scene = deps.startArScene({
       store,
@@ -670,6 +711,8 @@ export function mountViewingApp(
   function leavePreview(): void {
     unsubscribeProgress?.();
     unsubscribeProgress = null;
+    unsubscribeOsmBuildings?.();
+    unsubscribeOsmBuildings = null;
     scene?.dispose();
     scene = null;
     preview?.dispose();
@@ -707,6 +750,7 @@ export function mountViewingApp(
       destroyed = true;
       unsubscribeProgress?.();
       unsubscribeTracking?.();
+      unsubscribeOsmBuildings?.();
       scene?.dispose();
       preview?.dispose();
       hud?.destroy();

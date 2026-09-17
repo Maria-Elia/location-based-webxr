@@ -135,6 +135,39 @@ function toMesh(meshData: MeshData, color: number): Mesh {
 }
 
 /**
+ * Turns a load run's raw features into meshes and adds them to `group` —
+ * buildings, roads and ground plates, all free passes over the same fetch
+ * (no extra Overpass request). Split out of `runLoad` purely to keep that
+ * function's branching (status transitions, staleness checks) readable on
+ * its own.
+ */
+function populateGroup(
+  group: Group,
+  features: readonly OsmFeature[],
+  origin: { readonly lat: number; readonly lng: number },
+  clipTo: BoundingBox,
+): void {
+  const frame = enuFrameAt(origin);
+  for (const volume of buildBuildings(features, { frame })) {
+    group.add(toMesh(volume.mesh, BUILDING_RGB));
+  }
+  for (const road of buildRoads(features, { frame })) {
+    group.add(toMesh(road.mesh, DEFAULT_ROAD_RGB));
+  }
+  // `clipTo` is the union bbox of every tile actually fetched: triangulation
+  // is O(n²) in ring size (plates.ts), and clipping to what was fetched keeps
+  // a landuse polygon that extends beyond it from costing more than the
+  // fetched tiles' worth.
+  for (const plate of buildAreaPlates(features, {
+    frame,
+    groundHeightM: () => PLATE_Y_OFFSET_M,
+    clipTo,
+  })) {
+    group.add(toMesh(plate.mesh, PLATE_RGB));
+  }
+}
+
+/**
  * The GUARANTEE around the origin, not a fetch parameter (see `load()`'s
  * comment on why a radius-driven multi-tile disk fetch was dropped,
  * 2026-08-28). A single `FETCH_RES` (7) H3 tile has a ~1406 m edge (h3-js
@@ -172,6 +205,13 @@ export const DEFAULT_OSM_BUILDING_TIMEOUT_MS = 120_000;
 const OSM_BUILDING_USER_AGENT =
   "gps-plus-slam-tour-builder-desktop-preview (github.com/cs-util-com/location-based-webxr)";
 
+export type OsmBuildingStatus =
+  | "idle" // enabled, load() not called yet
+  | "loading"
+  | "loaded"
+  | "failed"
+  | "off";
+
 export interface OsmBuildingLayerOptions {
   /** The tour's origin. TourBuilder's own `lat`/`lon` shape (not `lng`). */
   readonly origin: { readonly lat: number; readonly lon: number };
@@ -187,6 +227,8 @@ export interface OsmBuildingLayerOptions {
   readonly timeoutMs?: number;
   /** Test seam. Defaults to a real `OverpassSource`. */
   readonly source?: OsmDataSource;
+  /** Per-session on/off toggle. Default `true`. */
+  readonly enabled?: boolean;
 }
 
 export interface OsmBuildingLayer {
@@ -195,11 +237,28 @@ export interface OsmBuildingLayer {
   /**
    * Fetches and extrudes buildings once. Never rejects: any failure, empty
    * area, or timeout leaves `group` exactly as it was (empty, unless already
-   * populated by a prior call).
+   * populated by a prior call). Starts a load only from `"idle"`; from any
+   * other status it resolves immediately without fetching.
    */
   load(): Promise<void>;
   /** Aborts an in-flight load, disposes GPU resources, clears the group. */
   dispose(): void;
+  getStatus(): OsmBuildingStatus;
+  /**
+   * Fires on every subsequent status transition only — no replay of the
+   * current status on subscribe. Returns an unsubscribe function.
+   */
+  onStatusChange(callback: (status: OsmBuildingStatus) => void): () => void;
+  /**
+   * `false` aborts any in-flight run; a completed load is hidden (not
+   * disposed/re-fetched) so a later `true` is instant. Only a run that never
+   * finished — `"idle"`/an aborted `"loading"` — has nothing to hide and gets
+   * disposed the same as before.
+   * `true` from `"off"` re-shows a hidden load with no fetch, or starts one
+   * if nothing was cached; from `"failed"` it always starts a fresh load
+   * (the retry path). From `"idle"`/`"loading"`/`"loaded"` it is a no-op.
+   */
+  setEnabled(enabled: boolean): void;
 }
 
 export function createOsmBuildingLayer(
@@ -226,11 +285,40 @@ export function createOsmBuildingLayer(
   // (contract D5) — the only place the two vocabularies meet.
   const origin = { lat: options.origin.lat, lng: options.origin.lon };
 
-  const controller = new AbortController();
   let disposed = false;
+  // Bumped by every dispose(), setEnabled(false) and new load run — the run
+  // that captured the current value at start is "stale" once this moves on,
+  // and a stale run's late settlement must add no meshes and emit no status.
+  let generation = 0;
+  let currentController: AbortController | null = null;
+  let status: OsmBuildingStatus = (options.enabled ?? true) ? "idle" : "off";
+  // Set once `runLoad` finishes populating `group`; lets `setEnabled(false)`
+  // hide instead of dispose, so toggling back on is instant with no re-fetch.
+  let hasCachedData = false;
+  const listeners = new Set<(status: OsmBuildingStatus) => void>();
 
-  async function load(): Promise<void> {
+  function setStatus(next: OsmBuildingStatus): void {
+    if (status === next) return;
+    status = next;
+    for (const listener of [...listeners]) listener(next);
+  }
+
+  /** A run superseded by a newer one, `setEnabled(false)`, or `dispose()`. */
+  function isStale(token: number): boolean {
+    return token !== generation || disposed;
+  }
+
+  /** Shared by `load()` and `setEnabled(true)` — see the module's plan doc. */
+  async function runLoad(): Promise<void> {
+    const token = ++generation;
+    // A previous run that failed part-way, or a partial load, may have left
+    // meshes behind; a retry must not stack a second copy on top.
+    disposeObject3D(group);
+    group.clear();
+    const controller = new AbortController();
+    currentController = controller;
     const timer = setTimeout(() => controller.abort(), timeoutMs);
+    setStatus("loading");
     try {
       // Deliberately NOT ensureAreaLoaded(origin, radiusM, ...): that always
       // rounds any non-zero radius up to a full 1-ring (7-tile) disk around
@@ -240,55 +328,117 @@ export function createOsmBuildingLayer(
       // tour's actual size/shape instead of a fixed guess in either
       // direction.
       const tiles = tilesToFetch(origin, options.route ?? []);
-      const { loaded } = await loadTiles(source, tiles, {
+      const { loaded, deferred, failed } = await loadTiles(source, tiles, {
         signal: controller.signal,
       });
-      if (disposed) return;
+      if (isStale(token)) return;
+
+      // Nothing arrived and at least one tile errored — an outage, not an
+      // empty area.
+      if (loaded.length === 0 && failed.length + deferred.length > 0) {
+        setStatus("failed");
+        return;
+      }
 
       const features = dedupeFeatures(loaded);
+      populateGroup(
+        group,
+        features,
+        origin,
+        unionBoundingBoxes(tiles.map(cellToBoundingBox)),
+      );
 
-      const frame = enuFrameAt(origin);
-      const volumes = buildBuildings(features, { frame });
-      for (const volume of volumes) {
-        group.add(toMesh(volume.mesh, BUILDING_RGB));
+      if (failed.length + deferred.length > 0) {
+        // Partial coverage beats flat ground, but the gap is still a
+        // dev-facing signal.
+        // eslint-disable-next-line no-console
+        console.warn("[desktop-preview] OSM building load partially failed.", {
+          failed,
+          deferred,
+        });
       }
-      // Free: same fetch, same features, just a second pure-data pass over
-      // them — no extra Overpass request.
-      const roads = buildRoads(features, { frame });
-      for (const road of roads) {
-        group.add(toMesh(road.mesh, DEFAULT_ROAD_RGB));
-      }
-      // Also free, same reasoning. `clipTo` is the union bbox of every tile
-      // actually fetched: triangulation is O(n²) in ring size (plates.ts),
-      // and clipping to what was fetched keeps a landuse polygon that
-      // extends beyond it from costing more than the fetched tiles' worth.
-      const plates = buildAreaPlates(features, {
-        frame,
-        groundHeightM: () => PLATE_Y_OFFSET_M,
-        clipTo: unionBoundingBoxes(tiles.map(cellToBoundingBox)),
-      });
-      for (const plate of plates) {
-        group.add(toMesh(plate.mesh, PLATE_RGB));
-      }
+      hasCachedData = true;
+      setStatus("loaded");
     } catch (error) {
+      if (isStale(token)) return;
       // Fail soft, always — see the module doc. A slow/down Overpass
-      // instance or an empty area both just mean the flat plane stays flat.
+      // instance both just means the flat plane stays flat; this is the one
+      // abort that counts as a failure (an abort we caused ourselves, via
+      // setEnabled(false) or dispose(), makes the run stale before this
+      // point, so it never reaches here).
       // eslint-disable-next-line no-console
       console.warn(
         "[desktop-preview] OSM building load failed; showing flat ground.",
         error,
       );
+      setStatus("failed");
     } finally {
       clearTimeout(timer);
+      if (token === generation) currentController = null;
     }
   }
 
-  function dispose(): void {
-    disposed = true;
-    controller.abort();
-    disposeObject3D(group);
-    group.clear();
+  async function load(): Promise<void> {
+    if (status !== "idle") return;
+    await runLoad();
   }
 
-  return { group, load, dispose };
+  function setEnabled(enabled: boolean): void {
+    if (enabled) {
+      if (status === "off" && hasCachedData) {
+        // A completed load was only hidden, not disposed — show it again
+        // with no fetch.
+        group.visible = true;
+        setStatus("loaded");
+        return;
+      }
+      // "off" with nothing cached, or "failed": (re)fetch.
+      if (status === "off" || status === "failed") {
+        void runLoad();
+      }
+      // idle/loading/loaded: no second fetch, no duplicate meshes.
+      return;
+    }
+    if (status === "off") return;
+    generation += 1; // stales any in-flight run
+    currentController?.abort();
+    currentController = null;
+    if (hasCachedData) {
+      // Keep the meshes around (and their GPU resources) so the next
+      // setEnabled(true) is instant instead of re-fetching from Overpass.
+      group.visible = false;
+    } else {
+      // Nothing finished loading yet (idle, or a run aborted mid-flight) —
+      // there is nothing worth caching.
+      disposeObject3D(group);
+      group.clear();
+    }
+    setStatus("off");
+  }
+
+  function dispose(): void {
+    if (disposed) return;
+    disposed = true;
+    generation += 1;
+    currentController?.abort();
+    currentController = null;
+    disposeObject3D(group);
+    group.clear();
+    hasCachedData = false;
+    // Leaving the preview must never trigger a "couldn't load" notice on a
+    // HUD that is being torn down — dispose() is silent.
+    listeners.clear();
+  }
+
+  return {
+    group,
+    load,
+    dispose,
+    getStatus: () => status,
+    onStatusChange(callback) {
+      listeners.add(callback);
+      return () => listeners.delete(callback);
+    },
+    setEnabled,
+  };
 }
