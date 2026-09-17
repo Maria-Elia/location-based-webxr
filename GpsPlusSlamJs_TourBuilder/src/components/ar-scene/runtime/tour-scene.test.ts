@@ -467,6 +467,41 @@ describe("the breadcrumb trail", () => {
     h.scene.tick(1); // > the 0.25 s trail interval
     expect(h.adapter.orbCount).toBe(2); // the far point is outside the 15 m window
   });
+
+  it("guides toward the nearest unvisited breadcrumb and marks it visited on arrival", () => {
+    const h = setup();
+    // Stand right on breadcrumb 0 (0,0,0) — within the 5 m arrival radius —
+    // so it should be marked visited and the guide should advance to
+    // breadcrumb 1 at (0,0,5).
+    h.adapter.setUserPosition(new Vector3(0, 0, 0));
+    h.scene.tick(1); // > the 0.25 s trail interval
+
+    expect(h.store.getState().breadcrumbProgress.visitedIndices).toEqual([0]);
+    expect(h.adapter.wayfindingTarget).toEqual({
+      index: 1,
+      coord: { lat: 0, lon: 5 },
+    });
+  });
+
+  it("never re-visits an already-visited breadcrumb, even standing on it again", () => {
+    const h = setup();
+    h.adapter.setUserPosition(new Vector3(0, 0, 0));
+    h.scene.tick(1);
+    expect(h.store.getState().breadcrumbProgress.visitedIndices).toContain(0);
+
+    // Walk away and back to the same spot.
+    h.adapter.setUserPosition(new Vector3(50, 0, 0));
+    h.scene.tick(1);
+    h.adapter.setUserPosition(new Vector3(0, 0, 0));
+    h.scene.tick(1);
+
+    // Index 0 appears exactly once no matter how many times the visitor
+    // stands on it — the one-way latch (BW3), not exact-array-equality
+    // (breadcrumb 1 sits exactly at the 5 m arrival boundary in this fixture
+    // and legitimately gets swept in on this second pass too).
+    const visited = h.store.getState().breadcrumbProgress.visitedIndices;
+    expect(visited.filter((i) => i === 0)).toHaveLength(1);
+  });
 });
 
 describe("dispose (plan §7.1)", () => {

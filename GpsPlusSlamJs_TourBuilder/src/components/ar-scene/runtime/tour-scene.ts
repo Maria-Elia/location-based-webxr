@@ -42,6 +42,9 @@ import { diffZones, type ZoneMap } from "../core/zone-commands.js";
 import { createModelCache, type ModelCache } from "../core/model-cache.js";
 import { createParseQueue, type ParseQueue } from "../core/parse-queue.js";
 import { assignOrbSlots, selectTrailWindow } from "../core/trail-window.js";
+import { advanceBreadcrumbProgress } from "../core/breadcrumb-progress.js";
+import { markBreadcrumbVisited } from "../../../store/breadcrumb-progress-slice.js";
+import { BREADCRUMB_ARRIVAL_RADIUS_M } from "../config.js";
 import {
   initialStorySession,
   leaveActive,
@@ -380,6 +383,23 @@ export function createTourScene(options: TourSceneOptions): TourScene {
       orbSlots.map((index) =>
         index === null ? null : (coords[index] ?? null),
       ),
+    );
+
+    const visited = new Set(store.getState().breadcrumbProgress.visitedIndices);
+    const { next, newlyVisited } = advanceBreadcrumbProgress(
+      world,
+      visited,
+      adapter.getUserPosition(),
+      BREADCRUMB_ARRIVAL_RADIUS_M,
+    );
+    if (newlyVisited !== null) {
+      store.dispatch(markBreadcrumbVisited(newlyVisited));
+    }
+    const nextCoord = next === null ? null : coords[next] ?? null;
+    adapter.setWayfindingTarget(
+      next === null || nextCoord === null
+        ? null
+        : { index: next, coord: nextCoord },
     );
   }
 

@@ -3,8 +3,10 @@
 The Three.js/WebXR side of viewing mode (TASK.md §2.3). It turns a loaded tour
 into anchored world-space content and drives it from the store: knights that
 load invisibly while the visitor is still far away and appear when they get
-close, tap-to-play stories with a floating transcript, and a trail of glowing
-breadcrumb orbs for the last approach.
+close, tap-to-play stories with a floating transcript, a trail of glowing
+breadcrumb orbs for the last approach, and a single wayfinding arrow/ring
+guiding toward the nearest not-yet-visited breadcrumb, advancing on arrival
+(plans/2026-09-17-breadcrumb-wayfinding-plan.md).
 
 It **composes** the earlier components rather than reinventing them — component
 1's audio player, component 2's in-world text, component 3's store contract,

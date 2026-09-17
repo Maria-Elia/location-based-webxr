@@ -43,6 +43,16 @@ export const BREADCRUMB_GUIDE_DISTANCE_MIN_M = 0;
 export const BREADCRUMB_GUIDE_DISTANCE_MAX_M = 50;
 
 /**
+ * How close counts as "arrived" at a breadcrumb (plan
+ * 2026-09-17-breadcrumb-wayfinding, BW6) — a bit past the 3 m breadcrumb
+ * sampling grain (`MIN_BREADCRUMB_DISTANCE_M`) so ordinary GPS jitter
+ * reliably crosses it without the visitor needing to stand exactly on the
+ * point. Tunable, same posture as every other threshold here — no stronger
+ * justification available before real outdoor testing.
+ */
+export const BREADCRUMB_ARRIVAL_RADIUS_M = 5;
+
+/**
  * Assumed visual footprint, in metres (A14, revised) — matches the sprite
  * template's own "knight-sized banner" default (`SPRITE_WIDTH_M`/`_HEIGHT_M`
  * in `gltf-loading.ts`). A GLTF model's real bounds aren't known until it's
