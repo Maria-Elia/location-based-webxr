@@ -4,7 +4,7 @@
 
 ## Latest
 
-Last recorded 2026-09-17T08:48:16.138Z · machine `c7aff3e4 (AMD Ryzen 5 3600 6-Core Processor, 12 threads)` · branch `feat/osm-integration` @ `5d8c20ea`
+Last recorded 2026-09-17T08:52:53.953Z · machine `c7aff3e4 (AMD Ryzen 5 3600 6-Core Processor, 12 threads)` · branch `feat/osm-integration` @ `c6d5a7c2`
 
 _Header describes the most recent write only; standalone stage runs update single rows. Median = the stage's same-machine history median. Per-recording provenance lives in the JSON block._
 
@@ -15,7 +15,7 @@ _Header describes the most recent write only; standalone stage runs update singl
 | `test:osm` | 72.2 s | ≈ | 67.1 s | – | – | |
 | `test:site-worker` | 3.2 s | ≈ | 3.2 s | – | – | |
 | `test:design-system` | 3.3 s | −2.9 s (−47 %) | 2.9 s | – | – | 🔻 faster |
-| `check:deadcode` | 4.0 s | ≈ | 3.8 s | – | – | |
+| `check:deadcode` | 3.5 s | ≈ | 3.7 s | – | – | |
 | `test:recorder` | 333.4 s | ≈ | 224.7 s | – | – | |
 | `test:starter` | 45.1 s | ≈ | 37.4 s | – | – | |
 | `test:example` | 4.4 s | ≈ | 4.3 s | – | – | |
@@ -34,7 +34,7 @@ _Header describes the most recent write only; standalone stage runs update singl
 - `test:osm`: 72.2, 75.0, 80.2, 61.9, 72.7, 61.9, 65.4, 67.3, 66.9, 62.6
 - `test:site-worker`: 3.2, 4.1, 4.3, 2.8, 3.3, 3.2, 3.3, 2.8, 3.0, 2.9
 - `test:design-system`: 3.3, 6.2, 3.3, 2.7, 3.3, 2.9, 2.9, 2.6, 2.6, 2.6
-- `check:deadcode`: 4.0, 3.7, 3.8, 3.6, 3.6, 3.5, 4.2, 3.7, 4.3, 4.7
+- `check:deadcode`: 3.5, 4.0, 3.7, 3.8, 3.6, 3.6, 3.5, 4.2, 3.7, 4.3
 - `test:recorder`: 333.4, 360.5, 197.3, 209.7, 211.2, 199.9, 224.4, 251.6, 224.9, 263.6
 - `test:starter`: 45.1, 42.9, 34.7, 36.0, 34.0, 35.9, 37.0, 37.8, 38.2, 46.7
 - `test:example`: 4.4, 4.7, 3.8, 3.9, 4.2, 4.3, 4.2, 4.3, 4.7, 5.0
@@ -49,7 +49,7 @@ _Header describes the most recent write only; standalone stage runs update singl
 ```json
 {
   "version": 1,
-  "meta": {"project":"location-based-webxr","lastWrite":{"ts":"2026-09-17T08:48:16.138Z","machine":"c7aff3e4|AMD-Ryzen-5-3600-6-Core-Processor|12","machineLabel":"c7aff3e4 (AMD Ryzen 5 3600 6-Core Processor, 12 threads)","git":"5d8c20ea","branch":"feat/osm-integration"}},
+  "meta": {"project":"location-based-webxr","lastWrite":{"ts":"2026-09-17T08:52:53.953Z","machine":"c7aff3e4|AMD-Ryzen-5-3600-6-Core-Processor|12","machineLabel":"c7aff3e4 (AMD Ryzen 5 3600 6-Core Processor, 12 threads)","git":"c6d5a7c2","branch":"feat/osm-integration"}},
   "stages": {
     "test:repo-config": { "history": [
       {"ts":"2026-09-10T19:21:25.942Z","durationMs":4053,"tests":{"passed":397,"failed":0,"skipped":0,"todo":0},"machine":"f936c64e|11th-Gen-Intel-R-Core-TM-i7-1185G7-3-00G|8","git":"9c0cc53d"},
@@ -196,6 +196,7 @@ _Header describes the most recent write only; standalone stage runs update singl
       {"ts":"2026-09-08T23:54:08.181Z","durationMs":1100789,"tests":null,"machine":"f936c64e|11th-Gen-Intel-R-Core-TM-i7-1185G7-3-00G|8","git":"02e99093"}
     ] },
     "check:deadcode": { "history": [
+      {"ts":"2026-09-17T08:52:53.953Z","durationMs":3515,"tests":null,"machine":"c7aff3e4|AMD-Ryzen-5-3600-6-Core-Processor|12","git":"c6d5a7c2"},
       {"ts":"2026-09-17T08:48:16.138Z","durationMs":4028,"tests":null,"machine":"c7aff3e4|AMD-Ryzen-5-3600-6-Core-Processor|12","git":"5d8c20ea"},
       {"ts":"2026-09-17T08:42:54.799Z","durationMs":3737,"tests":null,"machine":"c7aff3e4|AMD-Ryzen-5-3600-6-Core-Processor|12","git":"5d8c20ea"},
       {"ts":"2026-09-17T08:37:55.805Z","durationMs":3773,"tests":null,"machine":"c7aff3e4|AMD-Ryzen-5-3600-6-Core-Processor|12","git":"5d8c20ea"},
@@ -204,8 +205,7 @@ _Header describes the most recent write only; standalone stage runs update singl
       {"ts":"2026-09-17T08:17:04.454Z","durationMs":3533,"tests":null,"machine":"c7aff3e4|AMD-Ryzen-5-3600-6-Core-Processor|12","git":"5d8c20ea"},
       {"ts":"2026-09-17T08:16:35.061Z","durationMs":4244,"tests":null,"machine":"c7aff3e4|AMD-Ryzen-5-3600-6-Core-Processor|12","git":"5d8c20ea"},
       {"ts":"2026-09-17T07:46:53.122Z","durationMs":3688,"tests":null,"machine":"c7aff3e4|AMD-Ryzen-5-3600-6-Core-Processor|12","git":"074ad33d"},
-      {"ts":"2026-09-17T07:45:47.343Z","durationMs":4323,"tests":null,"machine":"c7aff3e4|AMD-Ryzen-5-3600-6-Core-Processor|12","git":"074ad33d"},
-      {"ts":"2026-09-15T18:45:05.868Z","durationMs":4670,"tests":null,"machine":"c7aff3e4|AMD-Ryzen-5-3600-6-Core-Processor|12","git":"f3c5b702"}
+      {"ts":"2026-09-17T07:45:47.343Z","durationMs":4323,"tests":null,"machine":"c7aff3e4|AMD-Ryzen-5-3600-6-Core-Processor|12","git":"074ad33d"}
     ] },
     "test:tour": { "history": [
       {"ts":"2026-09-10T19:59:56.177Z","durationMs":88914,"tests":null,"machine":"f936c64e|11th-Gen-Intel-R-Core-TM-i7-1185G7-3-00G|8","git":"9c0cc53d"},
