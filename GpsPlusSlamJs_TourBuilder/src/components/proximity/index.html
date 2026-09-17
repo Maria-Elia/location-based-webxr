@@ -26,7 +26,7 @@
         padding: 20px;
       }
       header {
-        grid-column: 1 / 3;
+        grid-column: 1 / -1;
         margin: -20px -20px 0;
         padding: 20px 20px 0;
       }
@@ -133,6 +133,27 @@
         overflow: auto;
         flex: 1;
         white-space: pre-wrap;
+      }
+
+      @media (max-width: 700px) {
+        .app {
+          grid-template-columns: 1fr;
+          grid-template-rows: auto minmax(320px, 55vh) auto;
+          height: auto;
+          min-height: 100vh;
+          overflow-y: auto;
+        }
+        .side {
+          flex-direction: row;
+          flex-wrap: wrap;
+        }
+        .panel {
+          flex: 1 1 220px;
+        }
+        .panel.log {
+          flex: 1 1 100%;
+          min-height: 160px;
+        }
       }
     </style>
   </head>
