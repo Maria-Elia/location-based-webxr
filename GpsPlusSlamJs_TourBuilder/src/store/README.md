@@ -61,6 +61,15 @@ from a proximity driver). Resets on `clearTour`.
 `setWaypointZone({ id, zone })` updates one. Transition **logic** lives in
 component 4 — this slice only stores the result. Resets on `clearTour`.
 
+### `breadcrumb-progress-slice.ts` — visited breadcrumbs (viewing)
+
+`{ visitedIndices: readonly number[] }`. `markBreadcrumbVisited(index)` is
+idempotent. **Not persisted** (unlike `tourProgress`) — re-showing a couple
+of already-passed breadcrumbs after a reload is cosmetic. Resets on
+`clearTour`. Selection logic (which index is nearest) lives in
+`ar-scene/core/breadcrumb-progress.ts` — this slice only stores the result,
+same split as `zones-slice.ts`.
+
 ### `authoring-slice.ts` — the draft (authoring)
 
 Mirrors `Tour` fields (draft has no top-level id — added at export). Actions:
@@ -78,7 +87,8 @@ Contract §2.3 set — `selectTour`, `selectOrderedWaypoints`,
 `selectNextUnvisitedWaypoint`, `selectTourProgress`, `selectWaypointZone`,
 `selectActiveWaypointIds`, `selectWaypointVisual(wp)`, `selectExportedTour` —
 plus additive conveniences (`selectAssets`, `selectWaypointById`,
-`selectIsWaypointVisited`, `selectVisitedWaypointIds`, `selectAuthoring*`).
+`selectIsWaypointVisited`, `selectVisitedWaypointIds`,
+`selectVisitedBreadcrumbIndices`, `selectAuthoring*`).
 `selectWaypointVisual` takes a `Waypoint`, not state. `selectExportedTour` bridges
 the authoring draft → a canonical, `validateTour`-passing `Tour` (packaging's read
 point). Typed against minimal structural state shapes, so they stay framework-free
@@ -86,7 +96,7 @@ while working on the live store.
 
 ### `viewing-store.ts` / `authoring-store.ts` — factories
 
-`createViewingStore()` composes `tour`/`tourProgress`/`zones`;
+`createViewingStore()` composes `tour`/`tourProgress`/`zones`/`breadcrumbProgress`;
 `createAuthoringStore()` composes `authoring` and whitelists all `authoring/*`
 actions into the recording/replay stream via `persistedExtraPrefixes` (one
 slice-prefix, derived from an action type — never a literal). Both wrap the
