@@ -57,6 +57,19 @@ new trail coordinates through the anchor's `setGpsPoint` + `markMovedExternally`
 Cost per frame is O(pool), not O(trail). The pulse collapses to a static glow
 under `prefers-reduced-motion` (injectable for tests).
 
+### `breadcrumb-guide.ts` — the single "walk here next" indicator
+
+One `createWayfindingHud` instance (the framework's arrow/ring/label
+presenter), pointed at exactly one target at a time via a re-usable anchor —
+same re-pointing pattern as `breadcrumb-orbs.ts`'s pool, but a single marker
+instead of many. A fresh `id: bc-${index}` is given on every swap so the
+presenter's own per-target hysteresis state never carries over from the
+previous, unrelated breadcrumb. Manually ticked
+(`autoRegisterFrameUpdate: false`) from the adapter's own `update()`, which
+every host (real AR, desktop preview, replay) already calls once per
+orchestrator tick — relying on the framework's own ambient frame-loop
+registry instead would behave differently between modes.
+
 ### `ray-sources.ts` — the desktop/AR seam
 
 `createPointerRaySource` wraps the shared tap-gated `pointer-tap-picker`;

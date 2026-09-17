@@ -131,7 +131,15 @@ describe("AR viewing scene replay e2e — real Task 1 walk", () => {
         makeWaypoint("wp-near-miss", "asset-knight-3"),
         makeWaypoint("wp-far", "asset-knight-4"),
       ],
-      breadcrumb: [],
+      // Every 10th recorded sample (~20 points over the 197-sample walk) —
+      // real positions from the same walk, not synthesized, so the
+      // wayfinding-guide assertion below is proving something about the
+      // actual recording. The fake adapter's toWorldPositions maps
+      // lat→X/lon→Z directly (see fake-scene-adapter.ts), so these encode
+      // world-space coordinates the same way `positions` above does.
+      breadcrumb: walk
+        .filter((_, i) => i % 10 === 0)
+        .map((v) => ({ lat: v.x, lon: v.z })),
     };
 
     const minDistance: Record<string, number> = {};
@@ -153,6 +161,8 @@ describe("AR viewing scene replay e2e — real Task 1 walk", () => {
     maxLiveTemplates: number;
     maxActiveParses: number;
     everVisible: Set<string>;
+    wayfindingIndices: readonly (number | null)[];
+    visitedCounts: readonly number[];
   }> {
     const store = createViewingStore();
     const adapter = createFakeSceneAdapter({ positions: fixture.positions });
@@ -168,11 +178,16 @@ describe("AR viewing scene replay e2e — real Task 1 walk", () => {
         /* quiet */
       },
     });
+    // Off by default (opt-in) — this replay exercises the guide itself, so
+    // turn it on explicitly rather than asserting against a hidden target.
+    scene.setWayfindingEnabled(true);
     store.dispatch(loadTour(fixture.tour));
 
     const everVisible = new Set<string>();
     let maxLiveTemplates = 0;
     let maxActiveParses = 0;
+    const wayfindingIndices: (number | null)[] = [];
+    const visitedCounts: number[] = [];
 
     for (const sample of walk) {
       adapter.setUserPosition(sample);
@@ -184,6 +199,10 @@ describe("AR viewing scene replay e2e — real Task 1 walk", () => {
       for (const id of adapter.visible) everVisible.add(id);
       maxLiveTemplates = Math.max(maxLiveTemplates, adapter.liveTemplates.size);
       maxActiveParses = Math.max(maxActiveParses, scene.debug().activeParses);
+      wayfindingIndices.push(adapter.wayfindingTarget?.index ?? null);
+      visitedCounts.push(
+        store.getState().breadcrumbProgress.visitedIndices.length,
+      );
     }
 
     return {
@@ -194,6 +213,8 @@ describe("AR viewing scene replay e2e — real Task 1 walk", () => {
       maxLiveTemplates,
       maxActiveParses,
       everVisible,
+      wayfindingIndices,
+      visitedCounts,
     };
   }
 
@@ -275,6 +296,29 @@ describe("AR viewing scene replay e2e — real Task 1 walk", () => {
     const run = await runWalk();
     expect(run.everVisible.has("wp-far")).toBe(false);
     expect(fixture.minDistance["wp-far"]).toBeGreaterThan(PREFETCH_R);
+    run.scene.dispose();
+  });
+
+  it("guides toward the nearest unvisited breadcrumb over the real walk, visited count never shrinking (plan 2026-09-17)", async () => {
+    const run = await runWalk();
+    const seen = run.wayfindingIndices.filter((i): i is number => i !== null);
+
+    expect(seen.length).toBeGreaterThan(0); // the guide had a target at some point
+    // Proves the guide actually advanced to more than one breadcrumb over the
+    // real walk, not just sat on the first one the whole time. NOT asserted
+    // as monotonically increasing index: nearest-distance selection is
+    // order-independent by design (BW2) — a real recorded walk can wander
+    // enough that a lower index legitimately becomes nearest after a higher
+    // one already was.
+    expect(new Set(seen).size).toBeGreaterThan(1);
+
+    // What IS guaranteed (BW3, one-way latch): the visited count only grows.
+    for (let i = 1; i < run.visitedCounts.length; i++) {
+      expect(run.visitedCounts[i]).toBeGreaterThanOrEqual(
+        run.visitedCounts[i - 1]!,
+      );
+    }
+    expect(run.visitedCounts.at(-1)).toBeGreaterThan(0);
     run.scene.dispose();
   });
 });

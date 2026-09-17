@@ -592,6 +592,121 @@ p[data-testid="qr-status"] {
   gap: var(--space-4);
 }
 
+/* In-session HUD: pinned over the camera feed, above the renderer canvas. */
+.ar-hud {
+  position: fixed;
+  inset: auto 0 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4)
+    calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(to top, rgb(16 19 26 / 92%), rgb(16 19 26 / 0%));
+  pointer-events: none;
+}
+
+.ar-hud > * {
+  pointer-events: auto;
+}
+
+.ar-hud-controls {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+
+/* A toggle button's one-time callout (hud.ts) — points down at the button
+   it introduces rather than turning the feature on unasked. Shared by
+   Auto-walk and the wayfinding guide toggle: same bubble, different text. */
+.hud-hint-wrap {
+  position: relative;
+}
+
+.hud-hint {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px 6px 10px;
+  background: var(--primary);
+  border: 1px solid var(--primary-hover);
+  border-radius: var(--radius-sm);
+  color: white;
+  font-size: 12px;
+  font-weight: 500;
+  /* Wraps rather than a fixed nowrap line — a phone-width viewport can be
+     narrower than the hint text itself, centered or not. */
+  max-width: min(220px, calc(100vw - 24px));
+  box-shadow: 0 4px 12px rgb(0 0 0 / 40%);
+  animation: hud-hint-in var(--duration-base) var(--ease-out) both;
+}
+
+/* `display: flex` above otherwise beats the UA stylesheet's `[hidden] {
+   display: none }` (same specificity, author rule loads later) — the
+   exact bug already hit once this session on `.landing-link-form` and
+   `.authoring-sections`. Without this, `hint.hidden = true` (the close
+   button, dismiss*Hint(), and the auto-timeout all just set this) updates
+   the DOM attribute but the bubble stays visually on screen. */
+.hud-hint[hidden] {
+  display: none;
+}
+
+/* Visually a 16px dot (unchanged), but `::before` invisibly pads its real
+   click/tap area out to 32px — same fix as the waypoint drag handle and
+   map markers (see their own comments: a bare icon-sized hitbox is
+   precise to the point of unusable, worse on touch), without changing
+   the bubble's footprint the way actually growing the button would. */
+.hud-hint-close {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  min-height: 0;
+  padding: 0;
+  border: none;
+  background: rgb(255 255 255 / 20%);
+  border-radius: 50%;
+  color: white;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.hud-hint-close::before {
+  content: "";
+  position: absolute;
+  inset: -8px;
+}
+
+.hud-hint-close:hover {
+  background: rgb(255 255 255 / 32%);
+}
+
+.hud-hint-arrow {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  color: var(--primary);
+  line-height: 0;
+}
+
+@keyframes hud-hint-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 6px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
 /* Desktop preview: the rendered world stands in for the camera feed, so it
    fills the viewport and sits BELOW the HUD and the map in the stack, exactly
    where the camera feed sits in a real session. */

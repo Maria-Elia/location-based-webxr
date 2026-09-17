@@ -33,11 +33,13 @@ describe("mountHud", () => {
     const onEndTour = vi.fn();
     const onToggleAutopilot = vi.fn();
     const onToggleOsmBuildings = vi.fn();
+    const onToggleWayfinding = vi.fn();
     const hud = mountHud(container, {
       ...(withMap ? { onToggleMap } : {}),
       ...(withEndTour ? { onEndTour } : {}),
       ...(withAutopilot ? { onToggleAutopilot } : {}),
       ...(withOsmBuildings ? { onToggleOsmBuildings } : {}),
+      onToggleWayfinding,
     });
     return {
       hud,
@@ -45,6 +47,7 @@ describe("mountHud", () => {
       onEndTour,
       onToggleAutopilot,
       onToggleOsmBuildings,
+      onToggleWayfinding,
     };
   }
 
@@ -84,9 +87,7 @@ describe("mountHud", () => {
   it("the hint's own × button dismisses it", () => {
     setup();
     const hint = query(container, "viewing-autopilot-hint")!;
-    const close = hint.querySelector<HTMLButtonElement>(
-      ".autopilot-hint-close",
-    )!;
+    const close = hint.querySelector<HTMLButtonElement>(".hud-hint-close")!;
 
     close.click();
 
@@ -136,6 +137,52 @@ describe("mountHud", () => {
     }
   });
 
+  it("shows the Wayfinding hint on mount, visible (not hidden)", () => {
+    setup();
+    const hint = query(container, "viewing-wayfinding-hint")!;
+    expect(hint).not.toBeNull();
+    expect(hint.hidden).toBe(false);
+  });
+
+  it("the Wayfinding hint's own × button dismisses it", () => {
+    setup();
+    const hint = query(container, "viewing-wayfinding-hint")!;
+    const close = hint.querySelector<HTMLButtonElement>(".hud-hint-close")!;
+
+    close.click();
+
+    expect(hint.hidden).toBe(true);
+  });
+
+  it("dismissWayfindingHint() hides the hint (the toggle button's own click path)", () => {
+    const { hud } = setup();
+    const hint = query(container, "viewing-wayfinding-hint")!;
+
+    hud.dismissWayfindingHint();
+
+    expect(hint.hidden).toBe(true);
+  });
+
+  it("clicking Wayfinding calls onToggleWayfinding", () => {
+    const { onToggleWayfinding } = setup();
+    query(container, "viewing-wayfinding")!.click();
+    expect(onToggleWayfinding).toHaveBeenCalledOnce();
+  });
+
+  it("the Wayfinding hint auto-dismisses after its timeout", () => {
+    vi.useFakeTimers();
+    try {
+      setup();
+      const hint = query(container, "viewing-wayfinding-hint")!;
+      vi.advanceTimersByTime(7999);
+      expect(hint.hidden).toBe(false);
+      vi.advanceTimersByTime(1);
+      expect(hint.hidden).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("setStatus/showNotice/setMapToggleLabel/setAutopilotLabel update their elements", () => {
     const { hud } = setup();
     hud.setStatus("hello");
@@ -154,6 +201,11 @@ describe("mountHud", () => {
     hud.setAutopilotLabel("Stop auto-walk");
     expect(query(container, "viewing-autopilot")!.textContent).toBe(
       "Stop auto-walk",
+    );
+
+    hud.setWayfindingLabel("Stop wayfinding");
+    expect(query(container, "viewing-wayfinding")!.textContent).toBe(
+      "Stop wayfinding",
     );
   });
 

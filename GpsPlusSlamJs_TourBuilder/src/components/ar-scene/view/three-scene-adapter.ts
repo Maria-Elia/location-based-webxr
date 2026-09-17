@@ -29,21 +29,30 @@
  */
 
 import type { Object3D } from "three";
-import { Vector3, type AudioListener, type Camera } from "three";
+import { Vector3, type AudioListener, type PerspectiveCamera } from "three";
 
 import type { TourCoord } from "../../../store/types.js";
 import { computeBillboardYaw } from "../../shared/billboard-math.js";
 import type {
+  BreadcrumbTarget,
   SceneAdapter,
   TemplateHandle,
   VisualHandle,
   WaypointHandle,
 } from "../runtime/scene-adapter.js";
+import {
+  BREADCRUMB_GUIDE_DISTANCE_MIN_M,
+  BREADCRUMB_GUIDE_DISTANCE_MAX_M,
+} from "../config.js";
 import { parseTemplate } from "./gltf-loading.js";
 import {
   createBreadcrumbOrbs,
   type BreadcrumbOrbs,
 } from "./breadcrumb-orbs.js";
+import {
+  createBreadcrumbGuide,
+  type BreadcrumbGuide,
+} from "./breadcrumb-guide.js";
 import type { TargetRayMatrixSource, XrSessionLike } from "./ray-sources.js";
 import {
   createWaypointRegistry,
@@ -65,7 +74,7 @@ export type { SceneAnchor };
 export interface ThreeSceneAdapterOptions {
   /** The `arWorldGroup` (or any world-space parent in replay mode). */
   readonly parent: Object3D;
-  readonly camera: Camera;
+  readonly camera: PerspectiveCamera;
   /** Must already be running — component 8 never unlocks it (plan A16). */
   readonly audioListener: AudioListener;
   /** Wraps `createGpsAnchor`; the demo injects an identity implementation. */
@@ -100,6 +109,14 @@ export function createThreeSceneAdapter(
     anchorFactory: (object3D, coord) => options.createAnchor(object3D, coord),
   });
 
+  const breadcrumbGuide: BreadcrumbGuide = createBreadcrumbGuide({
+    parent: options.parent,
+    camera: options.camera,
+    anchorFactory: (object3D, coord) => options.createAnchor(object3D, coord),
+    distanceMinM: BREADCRUMB_GUIDE_DISTANCE_MIN_M,
+    distanceMaxM: BREADCRUMB_GUIDE_DISTANCE_MAX_M,
+  });
+
   return {
     createWaypointRoot(id: string, coord: TourCoord): WaypointHandle {
       return registry.create(id, coord);
@@ -129,6 +146,14 @@ export function createThreeSceneAdapter(
 
     setOrbCoords(coords: readonly (TourCoord | null)[]): void {
       orbs.setCoords(coords);
+    },
+
+    setWayfindingTarget(target: BreadcrumbTarget | null): void {
+      breadcrumbGuide.setTarget(target);
+    },
+
+    setActiveWaypointPositions(positions: readonly Vector3[]): void {
+      breadcrumbGuide.setActiveWaypointPositions(positions);
     },
 
     buildTemplate(
@@ -263,11 +288,13 @@ export function createThreeSceneAdapter(
         );
       }
       orbs.update(dtSeconds);
+      breadcrumbGuide.update(dtSeconds);
     },
 
     dispose(): void {
       tapPicking.dispose();
       orbs.dispose();
+      breadcrumbGuide.dispose();
       for (const node of registry.values()) {
         node.text?.dispose();
         node.audio?.dispose();

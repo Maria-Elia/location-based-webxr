@@ -467,6 +467,112 @@ describe("the breadcrumb trail", () => {
     h.scene.tick(1); // > the 0.25 s trail interval
     expect(h.adapter.orbCount).toBe(2); // the far point is outside the 15 m window
   });
+
+  it("guides toward the nearest unvisited breadcrumb and marks it visited on arrival", () => {
+    const h = setup();
+    h.scene.setWayfindingEnabled(true);
+    // Stand right on breadcrumb 0 (0,0,0) — within the 5 m arrival radius —
+    // so it should be marked visited and the guide should advance to
+    // breadcrumb 1 at (0,0,5).
+    h.adapter.setUserPosition(new Vector3(0, 0, 0));
+    h.scene.tick(1); // > the 0.25 s trail interval
+
+    expect(h.store.getState().breadcrumbProgress.visitedIndices).toEqual([0]);
+    expect(h.adapter.wayfindingTarget).toEqual({
+      index: 1,
+      coord: { lat: 0, lon: 5 },
+    });
+  });
+
+  it("never re-visits an already-visited breadcrumb, even standing on it again", () => {
+    const h = setup();
+    h.adapter.setUserPosition(new Vector3(0, 0, 0));
+    h.scene.tick(1);
+    expect(h.store.getState().breadcrumbProgress.visitedIndices).toContain(0);
+
+    // Walk away and back to the same spot.
+    h.adapter.setUserPosition(new Vector3(50, 0, 0));
+    h.scene.tick(1);
+    h.adapter.setUserPosition(new Vector3(0, 0, 0));
+    h.scene.tick(1);
+
+    // Index 0 appears exactly once no matter how many times the visitor
+    // stands on it — the one-way latch (BW3), not exact-array-equality
+    // (breadcrumb 1 sits exactly at the 5 m arrival boundary in this fixture
+    // and legitimately gets swept in on this second pass too).
+    const visited = h.store.getState().breadcrumbProgress.visitedIndices;
+    expect(visited.filter((i) => i === 0)).toHaveLength(1);
+  });
+});
+
+describe("the wayfinding guide toggle", () => {
+  it("shows no guide target until setWayfindingEnabled(true) is called, even with a real target available", () => {
+    const h = setup();
+    h.adapter.setUserPosition(new Vector3(0, 0, 0));
+    h.scene.tick(1);
+
+    // Progress still advances in the background — only the visual is gated.
+    expect(h.store.getState().breadcrumbProgress.visitedIndices).toEqual([0]);
+    expect(h.adapter.wayfindingTarget).toBeNull();
+  });
+
+  it("shows the guide target once enabled", () => {
+    const h = setup();
+    h.scene.setWayfindingEnabled(true);
+    h.adapter.setUserPosition(new Vector3(0, 0, 0));
+    h.scene.tick(1);
+
+    expect(h.adapter.wayfindingTarget).toEqual({
+      index: 1,
+      coord: { lat: 0, lon: 5 },
+    });
+  });
+
+  it("hides the guide again after being disabled", () => {
+    const h = setup();
+    h.scene.setWayfindingEnabled(true);
+    h.adapter.setUserPosition(new Vector3(0, 0, 0));
+    h.scene.tick(1);
+    expect(h.adapter.wayfindingTarget).not.toBeNull();
+
+    h.scene.setWayfindingEnabled(false);
+    h.adapter.setUserPosition(new Vector3(50, 0, 0));
+    h.scene.tick(1);
+    expect(h.adapter.wayfindingTarget).toBeNull();
+  });
+
+  it("reports every ACTIVE waypoint's world position to the adapter, for it to decide whether that content is actually in view", () => {
+    const h = setup();
+    h.scene.setWayfindingEnabled(true);
+
+    // Far from every waypoint (wp-a's 10 m active radius sits at world
+    // (0,0,0)).
+    h.adapter.setUserPosition(new Vector3(0, 0, 40));
+    h.scene.tick(1);
+    expect(h.adapter.activeWaypointPositions).toEqual([]);
+
+    // Step toward wp-a one metre at a time — the proximity machine is a
+    // single-step state machine (contract), so a big jump only advances
+    // one zone per tick; a gradual approach is what actually lands on
+    // ACTIVE within this test, same as the `approach()` helper does along X.
+    for (let z = 40; z >= 8; z -= 1) {
+      h.adapter.setUserPosition(new Vector3(0, 0, z));
+      h.scene.tick(1);
+    }
+    expect(h.store.getState().zones.byWaypointId["wp-a"]).toBe("ACTIVE");
+    expect(h.adapter.activeWaypointPositions).toEqual([new Vector3(0, 0, 0)]);
+
+    // Walking back out of range clears it again — deliberately NOT
+    // asserting on `wayfindingTarget` here: whether the guide actually
+    // hides while a waypoint is ACTIVE is the real adapter's decision
+    // (it needs the camera to know if that content is actually in view),
+    // covered in `breadcrumb-guide.test.ts`, not this fake's.
+    for (let z = 8; z <= 40; z += 1) {
+      h.adapter.setUserPosition(new Vector3(0, 0, z));
+      h.scene.tick(1);
+    }
+    expect(h.adapter.activeWaypointPositions).toEqual([]);
+  });
 });
 
 describe("dispose (plan §7.1)", () => {

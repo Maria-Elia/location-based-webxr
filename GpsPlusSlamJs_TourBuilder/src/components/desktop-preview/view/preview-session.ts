@@ -215,11 +215,15 @@ function buildWorld(): {
   const arWorldGroup = new Group();
   scene.add(arWorldGroup);
 
-  return {
-    scene,
-    camera: new PerspectiveCamera(65, aspectOf(), 0.1, 1200),
-    arWorldGroup,
-  };
+  const camera = new PerspectiveCamera(65, aspectOf(), 0.1, 1200);
+  // Anything parented to the camera (audioListener, and now the wayfinding
+  // guide's indicator) only gets traversed by renderer.render(scene, camera)
+  // if the camera itself is reachable from `scene` — the camera's OWN view
+  // matrix works fine either way, but its children silently never render
+  // without this.
+  scene.add(camera);
+
+  return { scene, camera, arWorldGroup };
 }
 
 /** The animation clock, real by default and hand-driven under test. */

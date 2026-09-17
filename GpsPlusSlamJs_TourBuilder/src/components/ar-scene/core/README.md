@@ -31,6 +31,28 @@ keeping an orb that is still selected in the slot it already occupies. That is
 purely to avoid churn: re-pointing an anchor is the cost worth avoiding, so a
 typical frame moves one orb rather than sixteen.
 
+### `trail-coverage.ts` — does a waypoint have real trail nearby
+
+`hasNearbyTrail(waypointPos, points, radiusM, minCount = MIN_TRAIL_COVERAGE_COUNT)`
+— true once at least `minCount` breadcrumb points fall within `radiusM`
+(horizontal X/Z, D17) of the waypoint. Same coordinate space and `null`-skip
+convention as `selectTrailWindow`; not a new metric. A drag/tap-placed
+waypoint can have zero recorded breadcrumbs near it — this is the pure signal
+a future arrow-fallback feature uses to tell that apart from a real gap in an
+otherwise-walked route. See plans/2026-09-17-trail-coverage-plan.md.
+
+### `breadcrumb-progress.ts` — nearest-unvisited-breadcrumb selection
+
+`advanceBreadcrumbProgress(points, visited, userPos, arrivalRadiusM)` — the
+nearest not-yet-visited breadcrumb by horizontal X/Z distance (D17), or
+`null` when none remain. When the nearest point is within `arrivalRadiusM`
+it becomes `newlyVisited` and `next` is re-picked as if it were already
+visited, so the guide advances within the same call instead of lagging a
+tick. One-way latch: a visited index is never reselected. Distinct from
+`selectNextUnvisitedWaypoint` (store/selectors.ts) — that one walks tour
+order over waypoints; this one is distance-nearest over breadcrumbs (no
+stable id, D7 — keyed by array index like `trail-window.ts`).
+
 ### `visual-lifecycle.ts` — the generation-guarded async machine
 
 The reason a knight never appears on a waypoint the visitor already left. A load
@@ -75,3 +97,8 @@ One `*.test.ts` per module, all node-only. The interesting ones are
 `visual-lifecycle.test.ts` (resolve-after-idle, active-before-load,
 dispose-in-flight, re-enter-while-loading) and `model-cache.test.ts` (never
 evicting a referenced template, freeing a duplicate when two loads raced).
+`trail-coverage.test.ts` pins the radius-boundary-inclusive and
+`null`-skipping behavior against `selectTrailWindow`'s own conventions.
+`breadcrumb-progress.test.ts` pins the one-way latch (a visited index is
+never reselected even when nearest), the same-call re-advance on arrival,
+and the radius-boundary-inclusive convention shared with `trail-window.ts`.

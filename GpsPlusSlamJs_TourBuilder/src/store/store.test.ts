@@ -9,6 +9,10 @@ import {
 } from "./tour-progress-slice.js";
 import { zonesReducer, initZones, setWaypointZone } from "./zones-slice.js";
 import {
+  breadcrumbProgressReducer,
+  markBreadcrumbVisited,
+} from "./breadcrumb-progress-slice.js";
+import {
   authoringReducer,
   setTourMeta,
   addWaypoint,
@@ -35,6 +39,7 @@ import {
   selectWaypointById,
   selectIsWaypointVisited,
   selectVisitedWaypointIds,
+  selectVisitedBreadcrumbIndices,
   type ViewingStateShape,
   type AuthoringStateShape,
 } from "./selectors.js";
@@ -159,6 +164,24 @@ describe("zones slice", () => {
   it("resets on clearTour (cross-slice)", () => {
     const s = zonesReducer(undefined, initZones(["wp-1"]));
     expect(zonesReducer(s, clearTour()).byWaypointId).toEqual({});
+  });
+});
+
+// ── breadcrumbProgress slice ─────────────────────────────────────────────────
+
+describe("breadcrumbProgress slice", () => {
+  it("marks an index visited idempotently", () => {
+    let s = breadcrumbProgressReducer(undefined, markBreadcrumbVisited(2));
+    s = breadcrumbProgressReducer(s, markBreadcrumbVisited(2));
+    s = breadcrumbProgressReducer(s, markBreadcrumbVisited(5));
+    expect(s.visitedIndices).toEqual([2, 5]);
+  });
+
+  it("resets to empty on clearTour", () => {
+    const s = breadcrumbProgressReducer(undefined, markBreadcrumbVisited(2));
+    expect(breadcrumbProgressReducer(s, clearTour()).visitedIndices).toEqual(
+      [],
+    );
   });
 });
 
@@ -307,11 +330,13 @@ const viewingState = (
     tour: Tour | null;
     visited: string[];
     zones: Record<string, "IDLE" | "PREFETCHING" | "ACTIVE">;
+    visitedBreadcrumbs: number[];
   }> = {},
 ): ViewingStateShape => ({
   tour: { tour: over.tour === undefined ? sampleTour : over.tour },
   tourProgress: { visitedWaypointIds: over.visited ?? [] },
   zones: { byWaypointId: over.zones ?? {} },
+  breadcrumbProgress: { visitedIndices: over.visitedBreadcrumbs ?? [] },
 });
 
 describe("viewing selectors", () => {
@@ -366,6 +391,11 @@ describe("viewing selectors", () => {
     expect(selectIsWaypointVisited(s, "wp-2")).toBe(true);
     expect(selectIsWaypointVisited(s, "wp-1")).toBe(false);
     expect(selectVisitedWaypointIds(s)).toEqual(["wp-2"]);
+  });
+
+  it("selectVisitedBreadcrumbIndices reads the breadcrumbProgress slice", () => {
+    const s = viewingState({ visitedBreadcrumbs: [1, 3] });
+    expect(selectVisitedBreadcrumbIndices(s)).toEqual([1, 3]);
   });
 
   it("selectWaypointVisual resolves sprite / model / empty", () => {

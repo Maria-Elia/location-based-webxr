@@ -17,6 +17,7 @@
 import type { TourSliceState } from "./tour-slice.js";
 import type { TourProgressSliceState } from "./tour-progress-slice.js";
 import type { ZonesSliceState } from "./zones-slice.js";
+import type { BreadcrumbProgressSliceState } from "./breadcrumb-progress-slice.js";
 import type { AuthoringSliceState } from "./authoring-slice.js";
 import type {
   AssetEntry,
@@ -31,6 +32,7 @@ export interface ViewingStateShape {
   readonly tour: TourSliceState;
   readonly tourProgress: TourProgressSliceState;
   readonly zones: ZonesSliceState;
+  readonly breadcrumbProgress: BreadcrumbProgressSliceState;
 }
 export interface AuthoringStateShape {
   readonly authoring: AuthoringSliceState;
@@ -52,6 +54,14 @@ export function selectVisitedWaypointIds(
   state: ViewingStateShape,
 ): readonly string[] {
   return state.tourProgress.visitedWaypointIds;
+}
+
+/** Distance-nearest breadcrumb progress (design plan BW3/BW5) — distinct
+ *  from `selectVisitedWaypointIds`, which is tour-order over waypoints. */
+export function selectVisitedBreadcrumbIndices(
+  state: ViewingStateShape,
+): readonly number[] {
+  return state.breadcrumbProgress.visitedIndices;
 }
 
 export function selectNextUnvisitedWaypoint(

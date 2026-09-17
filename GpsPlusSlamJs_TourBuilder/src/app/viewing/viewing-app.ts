@@ -252,6 +252,7 @@ export function mountViewingApp(
   let unsubscribeTracking: (() => void) | null = null;
   let unsubscribeOsmBuildings: (() => void) | null = null;
   let mapVisible = false;
+  let wayfindingEnabled = false;
   let destroyed = false;
 
   function clearScreen(): void {
@@ -547,6 +548,7 @@ export function mountViewingApp(
     onToggleOsmBuildings?: () => void;
   }): void {
     clearScreen();
+    wayfindingEnabled = false;
     hud = mountHud(arHost, {
       onToggleMap: () => {
         mapVisible = !mapVisible;
@@ -558,6 +560,17 @@ export function mountViewingApp(
         }
       },
       onEndTour: options.onEndTour,
+      // Available in both AR and preview (unlike autopilot, which only
+      // makes sense in preview) — an opt-in aid, off at the start of every
+      // session rather than carried over from a previous one.
+      onToggleWayfinding: () => {
+        wayfindingEnabled = !wayfindingEnabled;
+        scene?.scene.setWayfindingEnabled(wayfindingEnabled);
+        hud?.setWayfindingLabel(
+          wayfindingEnabled ? "Stop wayfinding" : "Wayfinding",
+        );
+        hud?.dismissWayfindingHint();
+      },
       ...(options.onToggleAutopilot
         ? { onToggleAutopilot: options.onToggleAutopilot }
         : {}),
