@@ -336,3 +336,31 @@ describe("transcript billboarding (plan A14)", () => {
     expect(pickMesh!.parent!.rotation.y).toBe(0);
   });
 });
+
+describe("wayfinding guide (plan 2026-09-17)", () => {
+  it("renders an indicator once setWayfindingTarget is called, and clears it on null", () => {
+    const h = setup();
+    // The harness's identityAnchor() never actually moves the marker (it
+    // only reports "anchored"), so the target stays at the parent's origin.
+    // Move the camera away from it so the placement seam sees a real,
+    // non-degenerate distance instead of "target exactly at the camera".
+    h.camera.position.set(0, 0, 10);
+    h.camera.updateMatrixWorld();
+    const findIndicator = () =>
+      h.camera.children.find(
+        (c) =>
+          c.visible &&
+          (c.name === "wayfinding-arrow" || c.name === "wayfinding-circle"),
+      );
+
+    expect(findIndicator()).toBeUndefined();
+
+    h.adapter.setWayfindingTarget({ index: 0, coord: COORD });
+    h.adapter.update(1 / 60);
+    expect(findIndicator()).toBeDefined();
+
+    h.adapter.setWayfindingTarget(null);
+    h.adapter.update(1 / 60);
+    expect(findIndicator()).toBeUndefined();
+  });
+});

@@ -40,17 +40,21 @@ describe("hasNearbyTrail", () => {
       null,
     ];
     expect(hasNearbyTrail(ORIGIN, points, RADIUS_M, 10)).toBe(false);
-    expect(hasNearbyTrail(ORIGIN, [...points, { x: 5, z: 0 }], RADIUS_M, 10)).toBe(
-      true,
-    );
+    expect(
+      hasNearbyTrail(ORIGIN, [...points, { x: 5, z: 0 }], RADIUS_M, 10),
+    ).toBe(true);
   });
 
   it("defaults minCount to MIN_TRAIL_COVERAGE_COUNT when omitted", () => {
-    expect(hasNearbyTrail(ORIGIN, pointsAt(MIN_TRAIL_COVERAGE_COUNT, 5), RADIUS_M)).toBe(
-      true,
-    );
     expect(
-      hasNearbyTrail(ORIGIN, pointsAt(MIN_TRAIL_COVERAGE_COUNT - 1, 5), RADIUS_M),
+      hasNearbyTrail(ORIGIN, pointsAt(MIN_TRAIL_COVERAGE_COUNT, 5), RADIUS_M),
+    ).toBe(true);
+    expect(
+      hasNearbyTrail(
+        ORIGIN,
+        pointsAt(MIN_TRAIL_COVERAGE_COUNT - 1, 5),
+        RADIUS_M,
+      ),
     ).toBe(false);
   });
 });

@@ -30,6 +30,19 @@ export const TRAIL_ORB_POOL_SIZE = 16;
 export const TRAIL_WINDOW_RADIUS_M = 15;
 
 /**
+ * The wayfinding guide's own visual show/hide deadband (plan
+ * 2026-09-17-breadcrumb-wayfinding, BW7) — deliberately permissive. The
+ * orchestrator itself decides when a breadcrumb is "done" (arrival radius,
+ * `BREADCRUMB_ARRIVAL_RADIUS_M`) and swaps to a fresh target id at that
+ * moment; these two just need to avoid the framework presenter's OWN
+ * distance gate fighting that decision. 0 means a freshly assigned target is
+ * never hidden for being "too close"; 50 m is comfortably beyond any
+ * realistic distance to the next breadcrumb.
+ */
+export const BREADCRUMB_GUIDE_DISTANCE_MIN_M = 0;
+export const BREADCRUMB_GUIDE_DISTANCE_MAX_M = 50;
+
+/**
  * Assumed visual footprint, in metres (A14, revised) — matches the sprite
  * template's own "knight-sized banner" default (`SPRITE_WIDTH_M`/`_HEIGHT_M`
  * in `gltf-loading.ts`). A GLTF model's real bounds aren't known until it's

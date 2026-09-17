@@ -62,7 +62,8 @@ function identityAnchorFactory() {
 function findIndicator(camera: PerspectiveCamera) {
   return camera.children.find(
     (c) =>
-      c.visible && (c.name === "wayfinding-arrow" || c.name === "wayfinding-circle"),
+      c.visible &&
+      (c.name === "wayfinding-arrow" || c.name === "wayfinding-circle"),
   );
 }
 

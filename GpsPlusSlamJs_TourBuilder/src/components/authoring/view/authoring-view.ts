@@ -488,7 +488,9 @@ export function mountAuthoringView(
     /** Runs `mutate` (a DOM reorder of the non-dragged cards), then FLIPs
      *  every card whose position it changed into a smooth slide. */
     function flip(mutate: () => void): void {
-      const before = new Map(others().map((el) => [el, el.getBoundingClientRect().top]));
+      const before = new Map(
+        others().map((el) => [el, el.getBoundingClientRect().top]),
+      );
       mutate();
       for (const el of others()) {
         const from = before.get(el);

@@ -244,7 +244,12 @@ describe("createTourMap", () => {
   it("setWaypoints places one marker per view-model at the expected lat/lon", () => {
     const map = createTourMap(container)!;
     const models: WaypointMarkerViewModel[] = [
-      { id: "wp-1", position: { lat: 1, lon: 2 }, status: "unvisited", order: 1 },
+      {
+        id: "wp-1",
+        position: { lat: 1, lon: 2 },
+        status: "unvisited",
+        order: 1,
+      },
       { id: "wp-2", position: { lat: 3, lon: 4 }, status: "visited", order: 2 },
     ];
 
@@ -258,7 +263,12 @@ describe("createTourMap", () => {
   it("gives each marker status its own icon color", () => {
     const map = createTourMap(container)!;
     const models: WaypointMarkerViewModel[] = [
-      { id: "wp-1", position: { lat: 1, lon: 1 }, status: "unvisited", order: 1 },
+      {
+        id: "wp-1",
+        position: { lat: 1, lon: 1 },
+        status: "unvisited",
+        order: 1,
+      },
       { id: "wp-2", position: { lat: 2, lon: 2 }, status: "next", order: 2 },
       { id: "wp-3", position: { lat: 3, lon: 3 }, status: "visited", order: 3 },
     ];
@@ -278,7 +288,12 @@ describe("createTourMap", () => {
   it("labels an unvisited/next marker with its 1-based list position, not visited (which keeps the checkmark)", () => {
     const map = createTourMap(container)!;
     map.setWaypoints([
-      { id: "wp-1", position: { lat: 1, lon: 1 }, status: "unvisited", order: 1 },
+      {
+        id: "wp-1",
+        position: { lat: 1, lon: 1 },
+        status: "unvisited",
+        order: 1,
+      },
       { id: "wp-2", position: { lat: 2, lon: 2 }, status: "next", order: 2 },
       { id: "wp-3", position: { lat: 3, lon: 3 }, status: "visited", order: 3 },
     ]);
@@ -292,7 +307,12 @@ describe("createTourMap", () => {
   it("markers are not draggable when no onWaypointDragEnd is given", () => {
     const map = createTourMap(container)!;
     map.setWaypoints([
-      { id: "wp-1", position: { lat: 1, lon: 1 }, status: "unvisited", order: 1 },
+      {
+        id: "wp-1",
+        position: { lat: 1, lon: 1 },
+        status: "unvisited",
+        order: 1,
+      },
     ]);
 
     expect(
@@ -304,7 +324,12 @@ describe("createTourMap", () => {
     const onWaypointDragEnd = vi.fn();
     const map = createTourMap(container, { onWaypointDragEnd })!;
     map.setWaypoints([
-      { id: "wp-1", position: { lat: 1, lon: 1 }, status: "unvisited", order: 1 },
+      {
+        id: "wp-1",
+        position: { lat: 1, lon: 1 },
+        status: "unvisited",
+        order: 1,
+      },
     ]);
 
     expect(
@@ -394,8 +419,18 @@ describe("createTourMap", () => {
   it("setWaypoints centers the map on the waypoints before any GPS fix arrives", () => {
     const map = createTourMap(container)!;
     map.setWaypoints([
-      { id: "wp-1", position: { lat: 1, lon: 1 }, status: "unvisited", order: 1 },
-      { id: "wp-2", position: { lat: 2, lon: 2 }, status: "unvisited", order: 2 },
+      {
+        id: "wp-1",
+        position: { lat: 1, lon: 1 },
+        status: "unvisited",
+        order: 1,
+      },
+      {
+        id: "wp-2",
+        position: { lat: 2, lon: 2 },
+        status: "unvisited",
+        order: 2,
+      },
     ]);
 
     expect(lastMapInstance.fitBounds).toHaveBeenCalledOnce();
@@ -406,7 +441,12 @@ describe("createTourMap", () => {
       getObscuredBottomPx: () => 250,
     })!;
     map.setWaypoints([
-      { id: "wp-1", position: { lat: 1, lon: 1 }, status: "unvisited", order: 1 },
+      {
+        id: "wp-1",
+        position: { lat: 1, lon: 1 },
+        status: "unvisited",
+        order: 1,
+      },
     ]);
 
     const fitBoundsOptions = lastMapInstance.fitBounds.mock.calls[0]![1] as {
@@ -421,7 +461,12 @@ describe("createTourMap", () => {
     const map = createTourMap(container)!;
     map.setGpsPosition(52.5163, 13.3777);
     map.setWaypoints([
-      { id: "wp-1", position: { lat: 1, lon: 1 }, status: "unvisited", order: 1 },
+      {
+        id: "wp-1",
+        position: { lat: 1, lon: 1 },
+        status: "unvisited",
+        order: 1,
+      },
     ]);
 
     expect(lastMapInstance.fitBounds).not.toHaveBeenCalled();
@@ -430,12 +475,22 @@ describe("createTourMap", () => {
   it("setWaypoints replaces the previous marker layer wholesale", () => {
     const map = createTourMap(container)!;
     map.setWaypoints([
-      { id: "wp-1", position: { lat: 1, lon: 1 }, status: "unvisited", order: 1 },
+      {
+        id: "wp-1",
+        position: { lat: 1, lon: 1 },
+        status: "unvisited",
+        order: 1,
+      },
     ]);
     const firstMarker = markerInstances[0]!;
 
     map.setWaypoints([
-      { id: "wp-2", position: { lat: 2, lon: 2 }, status: "unvisited", order: 1 },
+      {
+        id: "wp-2",
+        position: { lat: 2, lon: 2 },
+        status: "unvisited",
+        order: 1,
+      },
     ]);
 
     expect(firstMarker.remove).toHaveBeenCalledOnce();

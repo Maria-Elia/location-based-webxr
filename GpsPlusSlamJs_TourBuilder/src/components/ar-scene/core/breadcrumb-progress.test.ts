@@ -40,7 +40,12 @@ describe("advanceBreadcrumbProgress", () => {
 
   it("picks the nearest unvisited point when it is beyond the arrival radius", () => {
     const points = pointsAt(20, 10, 30); // nearest unvisited is index 1 (10 m)
-    const result = advanceBreadcrumbProgress(points, new Set(), ORIGIN, RADIUS_M);
+    const result = advanceBreadcrumbProgress(
+      points,
+      new Set(),
+      ORIGIN,
+      RADIUS_M,
+    );
     expect(result).toEqual({ next: 1, newlyVisited: null });
   });
 
@@ -57,25 +62,45 @@ describe("advanceBreadcrumbProgress", () => {
 
   it("marks arrival and advances to the following point in the same call (BW4)", () => {
     const points = pointsAt(3, 10); // index 0 within the 5 m radius
-    const result = advanceBreadcrumbProgress(points, new Set(), ORIGIN, RADIUS_M);
+    const result = advanceBreadcrumbProgress(
+      points,
+      new Set(),
+      ORIGIN,
+      RADIUS_M,
+    );
     expect(result).toEqual({ next: 1, newlyVisited: 0 });
   });
 
   it("marks arrival with nothing left to advance to", () => {
     const points = pointsAt(3);
-    const result = advanceBreadcrumbProgress(points, new Set(), ORIGIN, RADIUS_M);
+    const result = advanceBreadcrumbProgress(
+      points,
+      new Set(),
+      ORIGIN,
+      RADIUS_M,
+    );
     expect(result).toEqual({ next: null, newlyVisited: 0 });
   });
 
   it("treats a point exactly at the arrival radius as arrived (inclusive, matches trail-window's <=)", () => {
     const points = pointsAt(5, 10);
-    const result = advanceBreadcrumbProgress(points, new Set(), ORIGIN, RADIUS_M);
+    const result = advanceBreadcrumbProgress(
+      points,
+      new Set(),
+      ORIGIN,
+      RADIUS_M,
+    );
     expect(result).toEqual({ next: 1, newlyVisited: 0 });
   });
 
   it("skips points that could not be converted to world space", () => {
     const points: (HorizontalPoint | null)[] = [null, { x: 3, z: 0 }];
-    const result = advanceBreadcrumbProgress(points, new Set(), ORIGIN, RADIUS_M);
+    const result = advanceBreadcrumbProgress(
+      points,
+      new Set(),
+      ORIGIN,
+      RADIUS_M,
+    );
     expect(result).toEqual({ next: null, newlyVisited: 1 });
   });
 });

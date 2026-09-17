@@ -55,9 +55,7 @@ describe("mountPackAndSharePanel", () => {
 
   it("labels the zip-url field for a non-technical author", () => {
     const { zipField } = setup();
-    expect(zipField.textContent).toContain(
-      "OneDrive / Dropbox link",
-    );
+    expect(zipField.textContent).toContain("OneDrive / Dropbox link");
   });
 
   it("shows no error and builds the link unchanged for an ordinary host", async () => {
