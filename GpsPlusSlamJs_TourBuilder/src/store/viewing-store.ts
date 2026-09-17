@@ -23,12 +23,17 @@ import {
   type TourProgressSliceState,
 } from "./tour-progress-slice.js";
 import { zonesReducer, type ZonesSliceState } from "./zones-slice.js";
+import {
+  breadcrumbProgressReducer,
+  type BreadcrumbProgressSliceState,
+} from "./breadcrumb-progress-slice.js";
 
-/** Framework base + the three viewing slices. */
+/** Framework base + the four viewing slices. */
 export interface ViewingRootState extends SlamAppRootState {
   tour: TourSliceState;
   tourProgress: TourProgressSliceState;
   zones: ZonesSliceState;
+  breadcrumbProgress: BreadcrumbProgressSliceState;
 }
 
 export interface ViewingStoreOptions {
@@ -40,6 +45,7 @@ type ViewingExtraReducers = {
   tour: typeof tourReducer;
   tourProgress: typeof tourProgressReducer;
   zones: typeof zonesReducer;
+  breadcrumbProgress: typeof breadcrumbProgressReducer;
 };
 
 export type ViewingStore = SlamAppStore<ViewingExtraReducers>;
@@ -53,6 +59,7 @@ export function createViewingStore(
       tour: tourReducer,
       tourProgress: tourProgressReducer,
       zones: zonesReducer,
+      breadcrumbProgress: breadcrumbProgressReducer,
     },
   });
 }
