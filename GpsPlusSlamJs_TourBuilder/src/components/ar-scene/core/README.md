@@ -31,6 +31,16 @@ keeping an orb that is still selected in the slot it already occupies. That is
 purely to avoid churn: re-pointing an anchor is the cost worth avoiding, so a
 typical frame moves one orb rather than sixteen.
 
+### `trail-coverage.ts` — does a waypoint have real trail nearby
+
+`hasNearbyTrail(waypointPos, points, radiusM, minCount = MIN_TRAIL_COVERAGE_COUNT)`
+— true once at least `minCount` breadcrumb points fall within `radiusM`
+(horizontal X/Z, D17) of the waypoint. Same coordinate space and `null`-skip
+convention as `selectTrailWindow`; not a new metric. A drag/tap-placed
+waypoint can have zero recorded breadcrumbs near it — this is the pure signal
+a future arrow-fallback feature uses to tell that apart from a real gap in an
+otherwise-walked route. See plans/2026-09-17-trail-coverage-plan.md.
+
 ### `visual-lifecycle.ts` — the generation-guarded async machine
 
 The reason a knight never appears on a waypoint the visitor already left. A load
@@ -75,3 +85,5 @@ One `*.test.ts` per module, all node-only. The interesting ones are
 `visual-lifecycle.test.ts` (resolve-after-idle, active-before-load,
 dispose-in-flight, re-enter-while-loading) and `model-cache.test.ts` (never
 evicting a referenced template, freeing a duplicate when two loads raced).
+`trail-coverage.test.ts` pins the radius-boundary-inclusive and
+`null`-skipping behavior against `selectTrailWindow`'s own conventions.
