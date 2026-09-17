@@ -126,6 +126,12 @@ export function startArScene(options: StartArSceneOptions): ArSceneHandle {
       getCamera: () => camera,
     });
 
+  // Registered before the scene exists: the anchors it creates join the same
+  // frame loop, and must tick after their floor height has been refreshed.
+  const unregisterSeamsUpdate = seams.update
+    ? runtime.registerFrameUpdate(() => seams.update?.())
+    : () => {};
+
   const xrSession = runtime.getXrSession();
   const scratchMatrix = new Matrix4();
 
@@ -191,6 +197,7 @@ export function startArScene(options: StartArSceneOptions): ArSceneHandle {
       // reference and GPU handle, then drop the alignment binding. Doing this
       // before the session ends is what keeps outstanding asset refs at zero.
       unregisterTick();
+      unregisterSeamsUpdate();
       scene.dispose();
       camera.remove(audioListener);
       alignment.dispose();

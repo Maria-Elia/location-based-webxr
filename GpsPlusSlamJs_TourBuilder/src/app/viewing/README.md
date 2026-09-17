@@ -55,7 +55,10 @@ test named after it.
    forwarding the raw flag puts every waypoint on top of the visitor at session
    entry: the whole tour activates, spawns and is marked visited in the first
    second. The wrapper reports anchored only once the object has actually been
-   committed to its computed target. → `ar-seams.ts`, `ar-seams.test.ts`.
+   committed to its computed target. It then **latches**: the anchor only
+   applies corrections above `2 m × (1 + distance/10)`, so re-checking a 2 m
+   tolerance every frame would freeze the zone of any stop whose correction
+   fell in between. → `ar-seams.ts`, `ar-seams.test.ts`.
 
 3. **Never assign `listener.context` after constructing an `AudioListener`.**
    Three's constructor builds `gain` on — and connects it to — whatever context
@@ -63,6 +66,13 @@ test named after it.
    `PositionalAudio` rendering into a graph nobody hears. Use
    `AudioContext.setContext(unlocked)` _before_ `new AudioListener()`.
    → `audio-listener.ts`, `audio-listener.test.ts`.
+
+Also: **stops stand on the visitor's floor, not at their stored altitude**
+(contract D6). GPS-world `y` is absolute altitude, so `0` is the ellipsoid
+(~100 m underground) and a stored altitude is one noisy fix. `ar-seams.ts`
+uses camera height minus `PHONE_HEIGHT_ABOVE_FLOOR_M` instead, and
+`startArScene` registers `seams.update()` before the scene so the anchors see
+the refreshed floor every frame.
 
 And one that is easy to _omit_: **`startSession()` (the recording slice) must be
 dispatched before the GPS watch starts**, or the GPS coordinator never feeds
@@ -89,6 +99,8 @@ call for the same reason.
 
 - `ar-seams.test.ts` — the geo→world math against the framework's own
   primitives, plus the two blockers above.
+- `ar-scene-runtime.test.ts` (jsdom) — the floor refresh is registered before
+  the scene creates its anchors and runs first each frame.
 - `audio-listener.test.ts` — asserts `listener.gain.context`, the assertion the
   wrong idiom fails.
 - `progress-store.test.ts` — round-trip, corrupt values, private-mode throws.
