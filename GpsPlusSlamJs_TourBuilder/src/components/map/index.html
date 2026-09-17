@@ -128,7 +128,7 @@
         white-space: pre-wrap;
       }
 
-      @media (max-width: 700px) {
+      @media (width <= 700px) {
         .app {
           grid-template-columns: 1fr;
           grid-template-rows: auto minmax(320px, 55vh) auto;
@@ -137,8 +137,7 @@
           overflow-y: auto;
         }
         .side {
-          flex-direction: row;
-          flex-wrap: wrap;
+          flex-flow: row wrap;
         }
         .panel {
           flex: 1 1 220px;
