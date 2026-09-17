@@ -20,8 +20,13 @@ describe("mountHud", () => {
 
   function setup(
     withAutopilot = true,
-    options: { withOsmBuildings?: boolean } = {},
+    options: {
+      withOsmBuildings?: boolean;
+      withMap?: boolean;
+      withEndTour?: boolean;
+    } = {},
   ) {
+    const { withOsmBuildings, withMap = true, withEndTour = true } = options;
     container = document.createElement("div");
     document.body.append(container);
     const onToggleMap = vi.fn();
@@ -29,10 +34,10 @@ describe("mountHud", () => {
     const onToggleAutopilot = vi.fn();
     const onToggleOsmBuildings = vi.fn();
     const hud = mountHud(container, {
-      onToggleMap,
-      onEndTour,
+      ...(withMap ? { onToggleMap } : {}),
+      ...(withEndTour ? { onEndTour } : {}),
       ...(withAutopilot ? { onToggleAutopilot } : {}),
-      ...(options.withOsmBuildings ? { onToggleOsmBuildings } : {}),
+      ...(withOsmBuildings ? { onToggleOsmBuildings } : {}),
     });
     return {
       hud,
@@ -42,6 +47,26 @@ describe("mountHud", () => {
       onToggleOsmBuildings,
     };
   }
+
+  it("renders no map/end-tour buttons when their handlers are omitted", () => {
+    setup(true, { withMap: false, withEndTour: false });
+    expect(query(container, "viewing-map-toggle")).toBeNull();
+    expect(query(container, "viewing-end-tour")).toBeNull();
+  });
+
+  it("clicking Map/End tour calls their handlers when given", () => {
+    const { onToggleMap, onEndTour } = setup();
+    query(container, "viewing-map-toggle")!.click();
+    query(container, "viewing-end-tour")!.click();
+    expect(onToggleMap).toHaveBeenCalledOnce();
+    expect(onEndTour).toHaveBeenCalledOnce();
+  });
+
+  it("setMapToggleLabel is a harmless no-op without a map toggle", () => {
+    const { hud } = setup(true, { withMap: false });
+    expect(() => hud.setMapToggleLabel("x")).not.toThrow();
+    expect(query(container, "viewing-map-toggle")).toBeNull();
+  });
 
   it("renders no autopilot button or hint when onToggleAutopilot is omitted", () => {
     setup(false);

@@ -655,7 +655,7 @@ describe("Viewing mode screen flow", () => {
     );
   });
 
-  it("updates the buildings label as the layer's status changes, and shows a notice on failure", async () => {
+  it("updates the buildings label as the layer's status changes, with no notice on failure", async () => {
     const { controller } = fakeController({ status: "unsupported" });
     const preview = fakePreviewSession({ osmBuildingsStatus: "loading" });
     const createPreviewSession = vi.fn(() => preview);
@@ -687,10 +687,7 @@ describe("Viewing mode screen flow", () => {
     expect(query(root, "viewing-osm-buildings-toggle")!.textContent).toBe(
       "Buildings: Failed (tap to retry)",
     );
-    expect(query(root, "viewing-hud-notice")!.hidden).toBe(false);
-    expect(query(root, "viewing-hud-notice")!.textContent).toBe(
-      "Couldn't load real buildings; showing flat ground.",
-    );
+    expect(query(root, "viewing-hud-notice")!.hidden).toBe(true);
   });
 
   it("derives the toggle click's target enabled value from the current status", async () => {

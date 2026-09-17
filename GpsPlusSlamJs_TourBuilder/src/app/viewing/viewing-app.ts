@@ -72,7 +72,7 @@ import {
   type ArRuntime,
   type ArSceneHandle,
 } from "./ar-scene-runtime.js";
-import { mountHud, type Hud } from "./hud.js";
+import { mountHud, type Hud } from "../../components/shared/hud.js";
 import {
   clearProgress,
   persistProgress,
@@ -670,9 +670,6 @@ export function mountViewingApp(
     // happened and onOsmBuildingsStatusChange will not replay it.
     const applyOsmBuildingsStatus = (status: OsmBuildingStatus): void => {
       hud?.setOsmBuildingsLabel(osmBuildingsLabel(status));
-      if (status === "failed") {
-        hud?.showNotice("Couldn't load real buildings; showing flat ground.");
-      }
     };
     unsubscribeOsmBuildings = session.onOsmBuildingsStatusChange(
       applyOsmBuildingsStatus,

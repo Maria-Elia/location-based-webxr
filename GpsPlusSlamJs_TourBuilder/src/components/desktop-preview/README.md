@@ -7,6 +7,13 @@ their work) sees here is the real tour, not a mock-up.
 
 Demo: `pnpm dev` → <http://localhost:8185/src/components/desktop-preview/>
 
+The demo mounts the same furniture the composed viewing app does: the shared
+HUD (`src/components/shared/hud.ts` — Map, Auto-walk, Buildings; no End-tour,
+this single-page demo has nothing to end back to) and component 7's 2D map
+(`createTourMap`), floated top-right and kept in sync with the walked
+position and visited waypoints via `buildMapData`/`computeMarkerViewModels`
+— the same functions `viewing-app.ts` calls.
+
 ```
              ┌── preview session ────────────────────────────┐
  keyboard ──►│ walk simulator ─► camera ─► seams ─► AR scene │──► the same

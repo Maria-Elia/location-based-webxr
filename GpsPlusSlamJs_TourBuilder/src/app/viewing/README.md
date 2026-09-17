@@ -15,14 +15,19 @@ Plan: [`plans/2026-08-14-viewing-composition-plan.md`](../../../plans/2026-08-14
 
 ## Modules
 
-| Path                    | What lives here                                                                                                                      |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `viewing-app.ts`        | The sequencer: screens, error states, the AR entry gesture, session lifecycle, progress persistence. The only stateful file here.    |
-| `ar-seams.ts`           | The three seams component 8 injects — `createAnchor`, `toWorld`, `getUserWorldPos`. The single geo→world step §2.5.1 permits.        |
-| `ar-scene-runtime.ts`   | Builds/tears down the live scene inside a session: alignment binding, audio listener, adapter (incl. the XR select ray), frame tick. |
-| `audio-listener.ts`     | Hands the gate's unlocked `AudioContext` to three the one way that actually works (see below).                                       |
-| `progress-store.ts`     | Visited waypoints in `localStorage`, so a reload or an evicted tab does not lose the visitor's place.                                |
-| `screens.ts` / `hud.ts` | The non-immersive screens and the in-session HUD. Plain DOM, no store, no framework.                                                 |
+| Path                  | What lives here                                                                                                                      |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `viewing-app.ts`      | The sequencer: screens, error states, the AR entry gesture, session lifecycle, progress persistence. The only stateful file here.    |
+| `ar-seams.ts`         | The three seams component 8 injects — `createAnchor`, `toWorld`, `getUserWorldPos`. The single geo→world step §2.5.1 permits.        |
+| `ar-scene-runtime.ts` | Builds/tears down the live scene inside a session: alignment binding, audio listener, adapter (incl. the XR select ray), frame tick. |
+| `audio-listener.ts`   | Hands the gate's unlocked `AudioContext` to three the one way that actually works (see below).                                       |
+| `progress-store.ts`   | Visited waypoints in `localStorage`, so a reload or an evicted tab does not lose the visitor's place.                                |
+| `screens.ts`          | The non-immersive screens. Plain DOM, no store, no framework.                                                                        |
+
+The in-session HUD (`mountHud`) lives in
+[`src/components/shared/hud.ts`](../../components/shared/hud.ts), not here —
+the desktop-preview demo (component 11) mounts the identical HUD, and a
+component may not import from `src/app/`.
 
 Where a device cannot run AR (any desktop), the entry screen offers the
 desktop preview instead of a dead end: `viewing-app.ts` swaps component 11's

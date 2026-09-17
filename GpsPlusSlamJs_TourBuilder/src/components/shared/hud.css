@@ -1,0 +1,167 @@
+/*
+ * Styling for `hud.ts`'s `.ar-hud` (component 8's/app's in-session HUD).
+ * Shared under components/ so the desktop-preview demo can link it too — see
+ * hud.ts's header comment.
+ *
+ * Every color/spacing/timing token is `var(--token, fallback)`: the composed
+ * app defines the real tokens in app.css's `:root`, so it renders unchanged;
+ * a standalone demo (no design-system tokens loaded) gets the fallback,
+ * matching the same hardcoded palette every other demo already uses
+ * (#2a3550 border, #3d5488 accent, 200ms/cubic-bezier(0.23,1,0.32,1) motion).
+ */
+
+.ar-hud {
+  position: fixed;
+  inset: auto 0 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 8px);
+  padding: var(--space-3, 12px) var(--space-4, 16px)
+    calc(var(--space-4, 16px) + env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(to top, rgb(16 19 26 / 92%), rgb(16 19 26 / 0%));
+  pointer-events: none;
+  font-family: system-ui, sans-serif;
+  color: var(--text, #e9eef7);
+}
+
+.ar-hud > * {
+  pointer-events: auto;
+}
+
+/* The tracking/coaching line (`hud.setStatus`) — plain text over the
+   gradient, no card/background of its own. */
+.status-banner {
+  margin: 0;
+  font-size: 13px;
+  color: var(--accent, #9ec1ff);
+}
+
+/* The one-shot notice channel (`hud.showNotice`) — same treatment, an
+   error tint instead of the coaching line's neutral accent. */
+.error-banner {
+  margin: 0;
+  font-size: 13px;
+  color: var(--error, #f87171);
+}
+
+.ar-hud-controls {
+  display: flex;
+  gap: var(--space-2, 8px);
+  justify-content: flex-end;
+}
+
+/* Direct children only (not `button` alone) — the hint's own `×` close
+   button is a `<button>` nested two levels deeper, inside `.autopilot-hint`,
+   and must not pick up this control-bar box styling. */
+.ar-hud-controls > button,
+.ar-hud-controls > .autopilot-wrap > button {
+  font: inherit;
+  font-size: 13px;
+  min-height: 44px;
+  padding: var(--space-3, 12px) var(--space-4, 16px);
+  background: #1b2338;
+  border: 1px solid var(--border, #2a3550);
+  border-radius: var(--radius-sm, 6px);
+  color: var(--text, #e9eef7);
+  cursor: pointer;
+  transition:
+    background var(--duration-base, 200ms)
+      var(--ease-out, cubic-bezier(0.23, 1, 0.32, 1)),
+    border-color var(--duration-base, 200ms)
+      var(--ease-out, cubic-bezier(0.23, 1, 0.32, 1));
+}
+
+.ar-hud-controls > button:hover:not(:disabled),
+.ar-hud-controls > .autopilot-wrap > button:hover:not(:disabled) {
+  background: var(--surface-hover, rgb(255 255 255 / 6%));
+  border-color: var(--border-strong, #3d5488);
+}
+
+/* Auto-walk's one-time callout (hud.ts) — points down at the button it
+   introduces rather than turning the feature on unasked. */
+.autopilot-wrap {
+  position: relative;
+}
+
+.autopilot-hint {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px 6px 10px;
+  background: var(--primary, #3d5488);
+  border: 1px solid var(--primary-hover, #4d6bb0);
+  border-radius: var(--radius-sm, 6px);
+  color: white;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 40%);
+  animation: autopilot-hint-in var(--duration-base, 200ms)
+    var(--ease-out, cubic-bezier(0.23, 1, 0.32, 1)) both;
+}
+
+/* `display: flex` above otherwise beats the UA stylesheet's `[hidden] {
+   display: none }` (same specificity, author rule loads later) — the
+   exact bug already hit once this session on `.landing-link-form` and
+   `.authoring-sections`. Without this, `hint.hidden = true` (the close
+   button, dismissAutopilotHint(), and the auto-timeout all just set this)
+   updates the DOM attribute but the bubble stays visually on screen. */
+.autopilot-hint[hidden] {
+  display: none;
+}
+
+/* Visually a 16px dot (unchanged), but `::before` invisibly pads its real
+   click/tap area out to 32px — same fix as the waypoint drag handle and
+   map markers (see their own comments: a bare icon-sized hitbox is
+   precise to the point of unusable, worse on touch), without changing
+   the bubble's footprint the way actually growing the button would. */
+.autopilot-hint-close {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  min-height: 0;
+  padding: 0;
+  border: none;
+  background: rgb(255 255 255 / 20%);
+  border-radius: 50%;
+  color: white;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.autopilot-hint-close::before {
+  content: "";
+  position: absolute;
+  inset: -8px;
+}
+
+.autopilot-hint-close:hover {
+  background: rgb(255 255 255 / 32%);
+}
+
+.autopilot-hint-arrow {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  color: var(--primary, #3d5488);
+  line-height: 0;
+}
+
+@keyframes autopilot-hint-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 6px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}

@@ -62,6 +62,22 @@ taps on touch. The tap decision itself is `tap-gate.ts`. Each component's own
 `*-interaction.ts` wraps this and interprets the returned `Intersection`'s
 `userData` — this module never looks at `userData` itself.
 
+### `hud.ts` / `hud.css` — the in-session HUD (view)
+
+`mountHud(container, options)`: the map/autopilot/OSM-buildings/end-tour
+control bar, status line, and one-shot notice channel. Used by the composed
+viewing app (`src/app/viewing/viewing-app.ts`) for the real AR/preview
+sessions, and by the desktop-preview demo (component 11) for its own preview
+session — the one exception to "no `demo.ts`/`index.html` here" is that this
+module has neither itself but is mounted _into_ another component's demo.
+`onToggleMap`/`onEndTour`/`onToggleAutopilot`/`onToggleOsmBuildings` are all
+optional: a caller only gets the buttons it wires a handler for. Lives here
+rather than `src/app/viewing/` because a component may not import from
+`src/app/` (dependency-cruiser's `components-and-store-not-to-app` rule).
+`hud.css` uses `var(--token, fallback)` throughout so it renders identically
+whether or not the composed app's design tokens (`app.css`'s `:root`) are
+loaded.
+
 ### `demo.css` — shared canvas-demo styles
 
 Base styles for the canvas-overlay demo pages (`:root`, `html/body`,
@@ -89,4 +105,6 @@ cover the pure modules (`clamp.ts` is exercised transitively; the
 panel). `pointer-tap-picker.test.ts` covers the stateful picking headlessly —
 synthetic pointer events against a fake element, real `Raycaster`/meshes —
 pinning the multi-touch/cancel invalidation, the tap-vs-drag/long-press gate
-wiring, the client→NDC mapping, and nearest-hit selection. Run `pnpm test:unit`.
+wiring, the client→NDC mapping, and nearest-hit selection. `hud.test.ts`
+(jsdom) covers `mountHud`'s DOM wiring: conditional buttons, label/notice
+updates, the autopilot hint lifecycle, `destroy()`. Run `pnpm test:unit`.
