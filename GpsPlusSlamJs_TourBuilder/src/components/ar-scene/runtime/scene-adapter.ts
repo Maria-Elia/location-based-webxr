@@ -55,6 +55,19 @@ export interface TapHit {
   readonly uv?: { readonly u: number; readonly v: number };
 }
 
+/**
+ * A breadcrumb index + its coordinate to guide the visitor toward, or `null`
+ * to show nothing. Carries the index (not just the coordinate) so the
+ * concrete adapter can give the framework's wayfinding presenter a fresh
+ * per-target id on every swap — reusing the same id across two different
+ * breadcrumbs would carry over that presenter's own arrival/hysteresis
+ * state from the wrong target.
+ */
+export interface BreadcrumbTarget {
+  readonly index: number;
+  readonly coord: TourCoord;
+}
+
 export interface SceneAdapter {
   // ── Anchoring (A1) ────────────────────────────────────────────────────────
   /** Create the waypoint's anchored root. The adapter owns `createGpsAnchor`. */
@@ -80,6 +93,9 @@ export interface SceneAdapter {
 
   /** Place the ≤ pool-size orbs (A3). Slots holding `null` are hidden. */
   setOrbCoords(coords: readonly (TourCoord | null)[]): void;
+
+  /** The single "walk here next" guide target (plan 2026-09-17). */
+  setWayfindingTarget(target: BreadcrumbTarget | null): void;
 
   // ── Visuals: template (shared, LRU'd) vs instance (per waypoint) ───────────
   /** Fetch-free: parse the asset at `url` into a shared template. Async + heavy. */

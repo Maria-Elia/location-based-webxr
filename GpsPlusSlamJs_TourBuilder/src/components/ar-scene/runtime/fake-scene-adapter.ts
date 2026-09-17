@@ -17,6 +17,7 @@ import { Vector3 } from "three";
 import type { TourCoord } from "../../../store/types.js";
 import { createListenerSet } from "../core/listener-set.js";
 import type {
+  BreadcrumbTarget,
   SceneAdapter,
   TapHit,
   TemplateHandle,
@@ -49,6 +50,7 @@ export interface FakeSceneAdapter extends SceneAdapter {
   readonly visible: ReadonlySet<string>;
   readonly pickTargetIds: readonly string[];
   readonly orbCount: number;
+  readonly wayfindingTarget: BreadcrumbTarget | null;
   setUserPosition(position: Vector3 | null): void;
   setAnchored(waypointId: string, anchored: boolean): void;
   /** Fire a tap as if the ray source had reported one. */
@@ -82,6 +84,7 @@ export function createFakeSceneAdapter(
   let userPosition: Vector3 | null = null;
   let pickTargetIds: string[] = [];
   let orbCount = 0;
+  let wayfindingTarget: BreadcrumbTarget | null = null;
   let nextVisualId = 0;
   let nextTemplateId = 0;
 
@@ -107,6 +110,9 @@ export function createFakeSceneAdapter(
     },
     get orbCount() {
       return orbCount;
+    },
+    get wayfindingTarget() {
+      return wayfindingTarget;
     },
     get audioLog() {
       return audioLog;
@@ -141,6 +147,9 @@ export function createFakeSceneAdapter(
     },
     setOrbCoords(coords: readonly (TourCoord | null)[]): void {
       orbCount = coords.filter((c) => c !== null).length;
+    },
+    setWayfindingTarget(target: BreadcrumbTarget | null): void {
+      wayfindingTarget = target;
     },
 
     buildTemplate(
