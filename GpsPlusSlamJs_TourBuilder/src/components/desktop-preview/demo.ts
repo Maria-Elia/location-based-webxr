@@ -200,6 +200,7 @@ camera.add(audioListener);
 // The same control bar the composed app mounts (component 11's own scope,
 // per plans/2026-09-17-osm-buildings-ui-plan.md, only excluded the
 // end-tour concept this single-page demo has no use for).
+let wayfindingEnabled = false;
 hud = mountHud(container, {
   onToggleMap: () => {
     mapVisible = !mapVisible;
@@ -221,6 +222,12 @@ hud = mountHud(container, {
     session.setOsmBuildingsEnabled(
       buildingStatus === "off" || buildingStatus === "failed",
     );
+  },
+  onToggleWayfinding: () => {
+    wayfindingEnabled = !wayfindingEnabled;
+    tourScene.setWayfindingEnabled(wayfindingEnabled);
+    hud?.setWayfindingLabel(wayfindingEnabled ? "Stop wayfinding" : "Wayfinding");
+    hud?.dismissWayfindingHint();
   },
 });
 session.onOsmBuildingsStatusChange((buildingStatus) => {
