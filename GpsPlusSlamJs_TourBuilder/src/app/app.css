@@ -720,6 +720,21 @@ p[data-testid="qr-status"] {
   cursor: grabbing;
 }
 
+/* The OSM attribution obligation (osm-building-layer.ts) — always visible
+   while desktop preview is open, below the HUD/map but above the canvas. */
+.preview-attribution {
+  position: fixed;
+  right: var(--space-2);
+  bottom: var(--space-2);
+  z-index: 1;
+  padding: 2px 6px;
+  font-size: 0.7rem;
+  color: rgb(255 255 255 / 80%);
+  background: rgb(0 0 0 / 35%);
+  border-radius: 3px;
+  pointer-events: none;
+}
+
 /* The map card is re-parented between the entry screen and the in-session
    overlay, so it must look right in both. */
 .ar-container .map-card {

@@ -1,7 +1,10 @@
 /** @vitest-environment jsdom */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { Group } from "three";
+import { OSM_ATTRIBUTION } from "gps-plus-slam-osm";
 import { createPreviewSession } from "./preview-session.js";
 import type { PreviewSessionOptions } from "./preview-session.js";
+import type { OsmBuildingLayer } from "./osm-building-layer.js";
 import type { WalkInput } from "../core/walk-simulator.js";
 
 const ORIGIN = { lat: 48.137, lon: 11.575 };
@@ -46,6 +49,18 @@ function stubControls(input: WalkInput, yawDeltaRad = 0) {
   };
 }
 
+/**
+ * Never touches the network: real desktop previews use a live
+ * `OverpassSource` (see osm-building-layer.ts), which these tests must not.
+ */
+function fakeOsmBuildings(): OsmBuildingLayer {
+  return {
+    group: new Group(),
+    load: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
+    dispose: vi.fn<() => void>(),
+  };
+}
+
 let container: HTMLElement;
 
 function session(overrides: Partial<PreviewSessionOptions> = {}) {
@@ -59,6 +74,7 @@ function session(overrides: Partial<PreviewSessionOptions> = {}) {
     raf: clock.raf,
     cancelRaf: clock.cancel,
     controls: stubControls({ forward: 0, strafe: 0, turn: 0 }),
+    osmBuildings: fakeOsmBuildings(),
     ...overrides,
   });
   return { instance, clock, renderer };
@@ -173,6 +189,29 @@ describe("preview session", () => {
     expect(instance.seams.toWorld(ORIGIN)!.x).toBeCloseTo(0, 3);
 
     instance.dispose();
+  });
+
+  it("loads the OSM building layer into the scene and disposes it on teardown", () => {
+    const osmBuildings = fakeOsmBuildings();
+    const { instance } = session({ osmBuildings });
+
+    expect(osmBuildings.load).toHaveBeenCalledTimes(1);
+    expect(osmBuildings.dispose).not.toHaveBeenCalled();
+
+    instance.dispose();
+
+    expect(osmBuildings.dispose).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows the OSM attribution line for as long as the session is open", () => {
+    const { instance } = session();
+
+    const attribution = container.querySelector(".preview-attribution");
+    expect(attribution?.textContent).toBe(OSM_ATTRIBUTION);
+
+    instance.dispose();
+
+    expect(container.querySelector(".preview-attribution")).toBeNull();
   });
 
   it("stops the loop and gives back the canvas when disposed", () => {

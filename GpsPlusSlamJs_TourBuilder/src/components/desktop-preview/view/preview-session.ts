@@ -51,6 +51,11 @@ import {
   type PreviewControls,
 } from "./preview-controls.js";
 import { createPreviewSeams, type PreviewSeams } from "./preview-seams.js";
+import {
+  createOsmBuildingLayer,
+  type OsmBuildingLayer,
+} from "./osm-building-layer.js";
+import { OSM_ATTRIBUTION } from "gps-plus-slam-osm";
 
 /** The subset of `WebGLRenderer` the session drives (test seam). */
 interface PreviewRenderer {
@@ -98,6 +103,13 @@ export interface PreviewSessionOptions {
   readonly now?: () => number;
   readonly raf?: (callback: (time: number) => void) => number;
   readonly cancelRaf?: (handle: number) => void;
+  /**
+   * Test seam — defaults to a real `OverpassSource`-backed layer. See
+   * `plans/2026-08-27-desktop-preview-osm-buildings-plan.md`: every real
+   * desktop preview (not only a test double) fetches live OSM buildings
+   * once, around the tour's origin, and fails soft to the flat plane.
+   */
+  readonly osmBuildings?: OsmBuildingLayer;
 }
 
 export interface PreviewSession {
@@ -222,6 +234,28 @@ export function createPreviewSession(
 
   // ── The world ─────────────────────────────────────────────────────────────
   const { scene, camera, arWorldGroup } = buildWorld();
+
+  // Real OSM buildings, fetched once around the tour's origin AND its whole
+  // breadcrumb — desktop preview only, see osm-building-layer.ts. Added to
+  // the scene root (fixed geographic content), never to arWorldGroup. Empty
+  // until (and unless) `load()` finds anything; the flat ground/sky/fog
+  // above is the permanent fallback, not replaced by this.
+  const osmBuildings =
+    options.osmBuildings ??
+    createOsmBuildingLayer({
+      origin: options.origin,
+      ...(options.route ? { route: options.route } : {}),
+    });
+  scene.add(osmBuildings.group);
+  void osmBuildings.load();
+
+  // The ODbL attribution obligation: a fixed, always-on credit line while
+  // desktop preview is open, deliberately not conditioned on whether
+  // buildings actually loaded (kept simple, per plan).
+  const attribution = document.createElement("div");
+  attribution.className = "preview-attribution";
+  attribution.textContent = OSM_ATTRIBUTION;
+  options.container.appendChild(attribution);
 
   const renderer =
     options.createRenderer?.(options.container) ?? createDefaultRenderer();
@@ -362,6 +396,8 @@ export function createPreviewSession(
       globalThis.window.removeEventListener("resize", onResize);
       controls.dispose();
       frameCallbacks.clear();
+      osmBuildings.dispose();
+      attribution.remove();
       renderer.domElement.remove();
       renderer.dispose();
     },
