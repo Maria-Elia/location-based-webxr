@@ -126,7 +126,6 @@ refreshWaypointMarkers();
 // ── Playback ──────────────────────────────────────────────────────────────────
 const scrub = document.getElementById("scrub") as HTMLInputElement;
 const playBtn = document.getElementById("play") as HTMLButtonElement;
-const toggleBtn = document.getElementById("toggle-map") as HTMLButtonElement;
 const readout = document.getElementById("readout") as HTMLSpanElement;
 const statusEl = document.getElementById("status") as HTMLPreElement;
 
@@ -167,6 +166,4 @@ scrub.addEventListener("input", () => {
   driver.reset();
   loop.seekTo(Number(scrub.value));
 });
-toggleBtn.addEventListener("click", () => tourMap.toggle());
-
 seekTo(0);
