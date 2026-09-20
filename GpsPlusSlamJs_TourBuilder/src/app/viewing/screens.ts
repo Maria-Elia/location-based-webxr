@@ -113,7 +113,11 @@ export function mountTourEntryScreen(
   const element = panel("viewing-entry");
 
   const title = heading(options.tourName);
-  const description = paragraph(options.tourDescription);
+  // An empty description is valid; skip the row rather than render a blank one.
+  const description =
+    options.tourDescription === ""
+      ? undefined
+      : paragraph(options.tourDescription);
   const summary = paragraph(
     options.visitedCount > 0
       ? `${options.waypointCount} stops · ${options.visitedCount} already visited`
@@ -151,9 +155,7 @@ export function mountTourEntryScreen(
   restart.addEventListener("click", () => options.onRestartTour());
 
   element.append(
-    title,
-    description,
-    summary,
+    ...[title, description, summary].filter((n) => n !== undefined),
     options.mapHost,
     enterAr,
     status,

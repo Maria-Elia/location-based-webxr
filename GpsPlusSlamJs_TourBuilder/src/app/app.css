@@ -535,6 +535,12 @@ p[data-testid="qr-status"] {
   border-radius: var(--radius-md);
 }
 
+/* Grid items don't collapse margins, so a paragraph's UA default 1em
+   top/bottom margin stacks on top of the grid gap. */
+.panel p {
+  margin: 0;
+}
+
 .panel h2 {
   margin: 0;
   font-size: 11px;
