@@ -472,10 +472,21 @@ p[data-testid="qr-status"] {
   margin-bottom: 0;
 }
 
-/* Go is a compact submit under the field, not a second full-width primary. */
-.landing-link-form > button {
-  justify-self: end;
-  min-width: 96px;
+/* Go sits beside the field, stretched to its height. The field takes the
+   remaining width; `min-width: 0` lets it shrink on a narrow phone. */
+.landing-link-row {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-3);
+}
+
+.landing-link-row > .field {
+  flex: 1;
+  min-width: 0;
+}
+
+.landing-link-row > button {
+  flex-shrink: 0;
 }
 
 .landing-dev-link {

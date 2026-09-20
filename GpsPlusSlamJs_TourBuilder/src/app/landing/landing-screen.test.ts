@@ -117,6 +117,27 @@ describe("mountLandingScreen", () => {
     );
   });
 
+  it("submits the pasted link on Enter (form submit), not only on a button click", () => {
+    const { root, navigate } = setup();
+    root
+      .querySelector<HTMLButtonElement>(
+        '[data-testid="landing-open-link-form"]',
+      )!
+      .click();
+    const input = root.querySelector<HTMLInputElement>(
+      '[data-testid="landing-tour-link"]',
+    )!;
+    input.value = "https://example.com/app/?tour=https%3A%2F%2Fhost%2Ft.zip";
+
+    input.form!.requestSubmit();
+
+    expect(navigate).toHaveBeenCalledTimes(1);
+    expect(input.getAttribute("enterkeyhint")).toBe("go");
+    expect(root.querySelector('[data-testid="landing-go"]')!.textContent).toBe(
+      "Open",
+    );
+  });
+
   it("wraps a pasted raw hosted-zip URL into a `?tour=` link, same as the author's share panel", () => {
     const { root, navigate } = setup();
     root

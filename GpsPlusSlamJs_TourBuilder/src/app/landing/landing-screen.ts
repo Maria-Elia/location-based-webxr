@@ -94,7 +94,9 @@ export function mountLandingScreen(
   linkBody.append(linkClip);
 
   const linkInput = document.createElement("input");
-  linkInput.type = "text";
+  linkInput.type = "url";
+  linkInput.autocomplete = "off";
+  linkInput.setAttribute("enterkeyhint", "go");
   linkInput.dataset["testid"] = "landing-tour-link";
   linkInput.placeholder = "Paste the tour link";
   const linkField = buildLabeledField(
@@ -104,14 +106,20 @@ export function mountLandingScreen(
   );
 
   const goButton = document.createElement("button");
-  goButton.type = "button";
+  goButton.type = "submit";
   goButton.className = "primary";
   goButton.dataset["testid"] = "landing-go";
-  goButton.textContent = "Go";
+  goButton.textContent = "Open";
 
   const linkStatus = document.createElement("p");
   linkStatus.dataset["testid"] = "landing-link-status";
-  linkForm.append(linkField, goButton, linkStatus);
+  // A <form> so Enter / the phone keyboard's Go key submits. `noValidate`:
+  // keep our own inline error instead of the browser's `type="url"` bubble.
+  const linkRow = document.createElement("form");
+  linkRow.className = "landing-link-row";
+  linkRow.noValidate = true;
+  linkRow.append(linkField, goButton);
+  linkForm.append(linkRow, linkStatus);
 
   const demoLink = document.createElement("a");
   demoLink.className = "landing-action";
@@ -130,7 +138,8 @@ export function mountLandingScreen(
     if (open) linkInput.focus({ preventScroll: true });
   });
 
-  goButton.addEventListener("click", () => {
+  linkRow.addEventListener("submit", (event) => {
+    event.preventDefault();
     const raw = linkInput.value.trim();
     linkStatus.textContent = "";
     linkStatus.dataset["state"] = "";
