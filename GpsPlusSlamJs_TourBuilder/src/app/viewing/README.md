@@ -70,7 +70,8 @@ test named after it.
 Also: **stops stand on the visitor's floor, not at their stored altitude**
 (contract D6). GPS-world `y` is absolute altitude, so `0` is the ellipsoid
 (~100 m underground) and a stored altitude is one noisy fix. `ar-seams.ts`
-uses camera height minus `PHONE_HEIGHT_ABOVE_FLOOR_M` instead, and
+uses the AR frame's own floor (`y = 0` of `local-floor`, mapped through the
+alignment) instead, independent of how high the phone is held, and
 `startArScene` registers `seams.update()` before the scene so the anchors see
 the refreshed floor every frame.
 

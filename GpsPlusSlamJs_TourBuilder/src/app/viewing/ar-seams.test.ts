@@ -18,11 +18,7 @@ import {
   type GpsAnchor,
 } from "gps-plus-slam-app-framework/visualization/gps-anchor";
 
-import {
-  createArSeams,
-  PHONE_HEIGHT_ABOVE_FLOOR_M,
-  type AnchorFactoryLike,
-} from "./ar-seams.js";
+import { createArSeams, type AnchorFactoryLike } from "./ar-seams.js";
 
 const ZERO = { lat: 48.0, lon: 11.0 };
 /** A deliberately non-identity alignment: catches frame mistakes an identity hides. */
@@ -85,10 +81,11 @@ function setup(
 }
 
 /**
- * The visitor's floor in GPS-world metres for the default harness: the camera
- * sits at the AR-local origin and `ALIGNMENT` has no vertical component.
+ * The visitor's floor in GPS-world metres for the default harness: the AR
+ * frame's own floor (`y = 0`, from the `local-floor` reference space) and
+ * `ALIGNMENT` has no vertical component.
  */
-const DEFAULT_FLOOR_ALTITUDE = -PHONE_HEIGHT_ABOVE_FLOOR_M;
+const DEFAULT_FLOOR_ALTITUDE = 0;
 
 /** The target the framework's own anchor math would compute for `coord`,
  *  placed at the visitor's floor as contract D6 requires. */
@@ -176,7 +173,22 @@ describe("toWorld", () => {
 
     const actual = seams.toWorld(coord)!;
 
-    expect(actual.y).toBeCloseTo(1.6 - PHONE_HEIGHT_ABOVE_FLOOR_M, 6);
+    expect(actual.y).toBeCloseTo(0, 6);
+  });
+
+  it("does not depend on how high the phone is held", () => {
+    const { seams, state } = setup();
+    const coord = { lat: 48.0012, lon: 11.0009 };
+    const at = (height: number) => {
+      state.camera!.position.set(0, height, 0);
+      state.camera!.updateMatrixWorld(true);
+      return seams.toWorld(coord)!.y;
+    };
+
+    const low = at(0.9);
+    const high = at(1.9);
+
+    expect(high).toBeCloseTo(low, 6);
   });
 
   it("returns null before a camera exists, since the floor is unknown", () => {
@@ -400,7 +412,7 @@ describe("createAnchor — with the real framework anchor", () => {
       c.frames(1);
 
       expect(c.objectWorld().y).toBeCloseTo(
-        c.cameraWorldY() - PHONE_HEIGHT_ABOVE_FLOOR_M,
+        c.cameraWorldY() - CAMERA_LOCAL_Y,
         4,
       );
       expect(c.objectWorld().x).toBeCloseTo(30, 3);
@@ -417,10 +429,7 @@ describe("createAnchor — with the real framework anchor", () => {
     c.frames(1);
 
     expect(c.objectWorld().x).toBeCloseTo(30, 3);
-    expect(c.objectWorld().y).toBeCloseTo(
-      c.cameraWorldY() - PHONE_HEIGHT_ABOVE_FLOOR_M,
-      4,
-    );
+    expect(c.objectWorld().y).toBeCloseTo(c.cameraWorldY() - CAMERA_LOCAL_Y, 4);
   });
 
   it("stays anchored through a correction too small for the anchor to apply", () => {

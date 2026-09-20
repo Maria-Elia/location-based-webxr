@@ -52,12 +52,6 @@ import type { SceneAnchor } from "../../components/ar-scene/view/three-scene-ada
  */
 const ANCHORED_TOLERANCE_M = 2;
 
-/**
- * How far below the phone the visitor's floor is. Contract D6: stored
- * altitudes are not consumed, so every stop stands on the visitor's floor.
- */
-export const PHONE_HEIGHT_ABOVE_FLOOR_M = 1.4;
-
 /** Floor changes smaller than this do not re-point the anchors. */
 const FLOOR_REFRESH_TOLERANCE_M = 0.5;
 
@@ -124,8 +118,12 @@ export function createArSeams(deps: ArSeamsDeps): ArSeams {
 
   /**
    * The visitor's floor as a GPS-world altitude (GPS-world `y` is absolute).
-   * Uses the target alignment rather than the group's mid-lerp matrix, so it
-   * agrees with what the anchors solve against.
+   * Contract D6: stored altitudes are not consumed, so every stop stands on the
+   * visitor's floor. That floor is the AR frame's own (`y = 0` of the
+   * `local-floor` reference space), mapped through the alignment — not a
+   * guess from how high the phone is held. Uses the target alignment rather
+   * than the group's mid-lerp matrix, so it agrees with what the anchors solve
+   * against.
    */
   function floorAltitude(): number | null {
     const alignment = deps.getAlignmentMatrix();
@@ -137,10 +135,8 @@ export function createArSeams(deps: ArSeamsDeps): ArSeams {
     const arLocal = arWorldGroup.worldToLocal(
       camera.getWorldPosition(floorScratch),
     );
-    return (
-      arLocal.applyMatrix4(alignmentScratch.fromArray(alignment)).y -
-      PHONE_HEIGHT_ABOVE_FLOOR_M
-    );
+    arLocal.y = 0;
+    return arLocal.applyMatrix4(alignmentScratch.fromArray(alignment)).y;
   }
 
   function toWorld(coord: TourCoord): Vector3 | null {
