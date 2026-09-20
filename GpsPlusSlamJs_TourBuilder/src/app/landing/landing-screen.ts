@@ -63,7 +63,7 @@ export function mountLandingScreen(
   createButton.innerHTML = `${ICONS.route}<span><strong>Create your own tour</strong><small>Walk to a spot you want and drop a waypoint</small></span>`;
   host.append(createButton);
 
-  // ── "I have a tour link" — collapsed by default, expands to a paste field ──
+  // ── "I have a tour link" — one card: the row expands in place to reveal the paste field ──
   const linkSection = document.createElement("div");
   linkSection.className = "landing-link-section";
 
@@ -71,11 +71,18 @@ export function mountLandingScreen(
   linkButton.type = "button";
   linkButton.className = "landing-action";
   linkButton.dataset["testid"] = "landing-open-link-form";
-  linkButton.innerHTML = `${ICONS.link}<span><strong>I have a tour link</strong><small>Paste a share link someone sent you</small></span>`;
+  linkButton.innerHTML = `${ICONS.link}<span><strong>I have a tour link</strong><small>Paste a share link someone sent you</small></span><span class="landing-action-chevron">${ICONS.chevron}</span>`;
+  linkButton.setAttribute("aria-expanded", "false");
 
+  // Same accordion mechanics as the authoring waypoint cards: the body
+  // animates `max-height` (not `hidden`, which can't transition), and
+  // `inert` keeps the collapsed field/button out of the tab order.
+  const linkBody = document.createElement("div");
+  linkBody.className = "landing-link-body";
+  linkBody.inert = true;
   const linkForm = document.createElement("div");
   linkForm.className = "landing-link-form";
-  linkForm.hidden = true;
+  linkBody.append(linkForm);
 
   const linkInput = document.createElement("input");
   linkInput.type = "text";
@@ -96,12 +103,15 @@ export function mountLandingScreen(
   const linkStatus = document.createElement("p");
   linkStatus.dataset["testid"] = "landing-link-status";
   linkForm.append(linkField, goButton, linkStatus);
-  linkSection.append(linkButton, linkForm);
+  linkSection.append(linkButton, linkBody);
   host.append(linkSection);
 
   linkButton.addEventListener("click", () => {
-    linkForm.hidden = !linkForm.hidden;
-    if (!linkForm.hidden) linkInput.focus();
+    const open = !linkSection.classList.contains("landing-link-section-open");
+    linkSection.classList.toggle("landing-link-section-open", open);
+    linkButton.setAttribute("aria-expanded", String(open));
+    linkBody.inert = !open;
+    if (open) linkInput.focus();
   });
 
   goButton.addEventListener("click", () => {

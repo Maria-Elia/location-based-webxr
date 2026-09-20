@@ -41,8 +41,8 @@ describe("mountLandingScreen", () => {
       root.querySelector('[data-testid="landing-create-tour"]'),
     ).not.toBeNull();
 
-    const linkForm = root.querySelector<HTMLElement>(".landing-link-form")!;
-    expect(linkForm.hidden).toBe(true);
+    const linkBody = root.querySelector<HTMLElement>(".landing-link-body")!;
+    expect(linkBody.inert).toBe(true);
 
     const demoLink = root.querySelector<HTMLAnchorElement>(
       '[data-testid="view-demo-tour"]',
@@ -59,21 +59,26 @@ describe("mountLandingScreen", () => {
 
   it("reveals the paste-link form only after its own toggle is clicked", () => {
     const { root } = setup();
-    const linkForm = root.querySelector<HTMLElement>(".landing-link-form")!;
+    const linkBody = root.querySelector<HTMLElement>(".landing-link-body")!;
+    const toggle = root.querySelector<HTMLButtonElement>(
+      '[data-testid="landing-open-link-form"]',
+    )!;
 
     root
       .querySelector<HTMLButtonElement>(
         '[data-testid="landing-open-link-form"]',
       )!
       .click();
-    expect(linkForm.hidden).toBe(false);
+    expect(linkBody.inert).toBe(false);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
 
     root
       .querySelector<HTMLButtonElement>(
         '[data-testid="landing-open-link-form"]',
       )!
       .click();
-    expect(linkForm.hidden).toBe(true);
+    expect(linkBody.inert).toBe(true);
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
   });
 
   it("follows a pasted full share link (its own `?tour=`) unchanged", () => {

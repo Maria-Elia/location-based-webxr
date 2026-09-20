@@ -431,24 +431,85 @@ p[data-testid="qr-status"] {
   font-size: var(--text-fluid-sm);
 }
 
+/* One card: the "I have a tour link" row is its header and expands in place
+   to reveal the paste field below it, rather than adding a second card. */
 .landing-link-section {
-  display: grid;
-  gap: var(--space-3);
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+/* The row loses its own card skin (the section provides it) — `.landing-
+   link-section` prefix so this outranks the generic `button` rule. */
+.landing-link-section > .landing-action {
+  background: none;
+  border: none;
+  border-radius: 0;
+}
+
+/* No background change and no press-scale: the row is part of the card, so
+   a differently-coloured or shrinking row reads as a button nested inside a
+   button. Hover/press feedback comes from the chevron instead. These need
+   the same `:hover:not(:disabled)` specificity as the generic button
+   rules to beat them. */
+.landing-link-section > .landing-action:hover:not(:disabled),
+.landing-link-section > .landing-action:active:not(:disabled) {
+  background: none;
+  transform: none;
+}
+
+.landing-link-section > .landing-action:hover .landing-action-chevron {
+  color: var(--accent);
+}
+
+/* The card clips overflow, so the default outset focus ring would be cut off. */
+.landing-link-section > .landing-action:focus-visible {
+  outline-offset: -2px;
+}
+
+/* Not `display: grid` like the row's other spans: it holds only the
+   chevron, which turns to point down while the card is open. */
+.landing-action > .landing-action-chevron {
+  display: inline-flex;
+  margin-left: auto;
+  color: var(--text-muted);
+  transition: transform 140ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.landing-link-section-open .landing-action-chevron {
+  transform: rotate(90deg);
+}
+
+/* Expand/collapse matches the authoring waypoint cards' `.wp-body`:
+   `max-height` from 0, 200ms on the same ease-out curve. The padding and
+   divider live on the inner `.landing-link-form` so the collapsed body is
+   truly 0px tall (padding on the clipped element itself would still show). */
+.landing-link-body {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 200ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.landing-link-section-open .landing-link-body {
+  max-height: 400px;
 }
 
 .landing-link-form {
   display: grid;
   gap: var(--space-3);
   padding: var(--space-fluid-4);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-top: 1px solid var(--border);
 }
 
-/* `display: grid` above otherwise beats the UA stylesheet's `[hidden] {
-   display: none }` (same specificity, author rule loads later), so the
-   collapsed form would render open on first paint. */
-.landing-link-form[hidden] {
+/* The status line is an empty <p> until a paste fails. Its UA default 1em
+   margins, `min-height: 1.2em` and the grid gap otherwise leave a dead strip
+   under Go, so drop the margins and hide it while empty. */
+.landing-link-form p[data-testid="landing-link-status"] {
+  margin: 0;
+}
+
+.landing-link-form p[data-testid="landing-link-status"]:empty {
   display: none;
 }
 
