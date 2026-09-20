@@ -15,6 +15,7 @@
  * component may not import from `src/app/` (dependency-cruiser).
  */
 
+import { HUD_ICONS } from "./hud-icons.js";
 import {
   autopilotLabel,
   buildingsAppearance,
@@ -22,6 +23,7 @@ import {
   wayfindingLabel,
   type HudBuildingsStatus,
 } from "./hud-state.js";
+import { createIconButton } from "./icon-button.js";
 
 /** How long a callout hint stays up before it dismisses itself. */
 const AUTOPILOT_HINT_TIMEOUT_MS = 8000;
@@ -66,26 +68,33 @@ export interface Hud {
   destroy(): void;
 }
 
-/** A HUD toggle whose visible wording the HUD derives from state. */
-interface Toggle {
-  readonly element: HTMLButtonElement;
-  set(label: string, pressed: boolean): void;
+interface ToggleFlags {
+  readonly busy?: boolean;
+  readonly error?: boolean;
 }
 
-function textToggle(testid: string, label: string): Toggle {
-  const element = document.createElement("button");
-  element.dataset.testid = testid;
-  const toggle: Toggle = {
-    element,
-    set(next, pressed) {
-      element.textContent = next;
-      element.setAttribute("aria-label", next);
-      element.setAttribute("aria-pressed", String(pressed));
+/** A HUD toggle whose wording and look the HUD derives from state. */
+interface Toggle {
+  readonly element: HTMLButtonElement;
+  set(label: string, pressed: boolean, flags?: ToggleFlags): void;
+}
+
+function iconToggle(testid: string, icon: string, label: string): Toggle {
+  const button = createIconButton({ icon, label, pressed: false });
+  button.element.dataset.testid = testid;
+  return {
+    element: button.element,
+    set(next, pressed, flags = {}) {
+      button.setLabel(next);
+      button.setPressed(pressed);
+      button.setBusy(flags.busy === true);
+      button.setError(flags.error === true);
     },
   };
-  toggle.set(label, false);
-  return toggle;
 }
+
+const BUILDINGS_FAILED_NOTICE =
+  "Buildings couldn't load. Tap the buildings button to retry.";
 
 export function mountHud(container: HTMLElement, options: HudOptions): Hud {
   const element = document.createElement("div");
@@ -102,24 +111,41 @@ export function mountHud(container: HTMLElement, options: HudOptions): Hud {
   notice.dataset.testid = "viewing-hud-notice";
   notice.hidden = true;
 
+  let lastBuildingsStatus: HudBuildingsStatus = "off";
+
   const controls = document.createElement("div");
   controls.className = "ar-hud-controls";
 
-  const mapToggle = textToggle("viewing-map-toggle", mapLabel(false));
+  const mapToggle = iconToggle(
+    "viewing-map-toggle",
+    HUD_ICONS.map,
+    mapLabel(false),
+  );
   if (options.onToggleMap) {
     mapToggle.element.addEventListener("click", () => options.onToggleMap?.());
   }
 
-  const endTour = document.createElement("button");
-  endTour.textContent = "End tour";
+  const endTour = createIconButton({
+    icon: HUD_ICONS.exit,
+    label: "End tour",
+    variant: "danger",
+  }).element;
   endTour.dataset.testid = "viewing-end-tour";
   if (options.onEndTour) {
     endTour.addEventListener("click", () => options.onEndTour?.());
   }
 
-  const autopilot = textToggle("viewing-autopilot", autopilotLabel(false));
+  const autopilot = iconToggle(
+    "viewing-autopilot",
+    HUD_ICONS.walk,
+    autopilotLabel(false),
+  );
 
-  const wayfinding = textToggle("viewing-wayfinding", wayfindingLabel(false));
+  const wayfinding = iconToggle(
+    "viewing-wayfinding",
+    HUD_ICONS.wayfinding,
+    wayfindingLabel(false),
+  );
   wayfinding.element.addEventListener("click", () =>
     options.onToggleWayfinding(),
   );
@@ -186,8 +212,9 @@ export function mountHud(container: HTMLElement, options: HudOptions): Hud {
     return { wrap, show, dismiss };
   }
 
-  const osmBuildingsToggle = textToggle(
+  const osmBuildingsToggle = iconToggle(
     "viewing-osm-buildings-toggle",
+    HUD_ICONS.buildings,
     buildingsAppearance("off").label,
   );
 
@@ -253,8 +280,22 @@ export function mountHud(container: HTMLElement, options: HudOptions): Hud {
     },
     setOsmBuildingsStatus(buildingStatus) {
       if (!options.onToggleOsmBuildings) return;
-      const appearance = buildingsAppearance(buildingStatus);
-      osmBuildingsToggle.set(appearance.label, appearance.pressed);
+      const { label, pressed, busy, error } =
+        buildingsAppearance(buildingStatus);
+      osmBuildingsToggle.set(label, pressed, { busy, error });
+      // The red ring alone is not readable at a glance outdoors, so the
+      // transition INTO failed also raises a notice. Leaving failed clears it,
+      // but only while it still shows this text (never someone else's notice).
+      if (buildingStatus === "failed" && lastBuildingsStatus !== "failed") {
+        notice.textContent = BUILDINGS_FAILED_NOTICE;
+        notice.hidden = false;
+      } else if (
+        buildingStatus !== "failed" &&
+        notice.textContent === BUILDINGS_FAILED_NOTICE
+      ) {
+        notice.hidden = true;
+      }
+      lastBuildingsStatus = buildingStatus;
     },
     dismissAutopilotHint() {
       autopilotHint?.dismiss();

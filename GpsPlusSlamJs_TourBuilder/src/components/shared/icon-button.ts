@@ -9,7 +9,7 @@
  * mouse user gets the tooltip, assistive tech gets the name.
  */
 
-export type IconButtonVariant = "default" | "danger";
+type IconButtonVariant = "default" | "danger";
 
 export interface IconButtonOptions {
   /** Inline SVG markup. Use `currentColor` so CSS controls the color. */

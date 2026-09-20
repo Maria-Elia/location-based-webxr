@@ -267,4 +267,91 @@ describe("mountHud", () => {
     const { hud: hudNoToggle } = setup(true, { withOsmBuildings: false });
     expect(() => hudNoToggle.setOsmBuildingsStatus("failed")).not.toThrow();
   });
+
+  describe("icon buttons", () => {
+    it("every HUD button is a round icon button with an icon, and keeps its testid", () => {
+      setup(true, { withOsmBuildings: true });
+      for (const id of [
+        "viewing-map-toggle",
+        "viewing-end-tour",
+        "viewing-autopilot",
+        "viewing-wayfinding",
+        "viewing-osm-buildings-toggle",
+      ]) {
+        const button = query(container, id)!;
+        expect(button.classList.contains("icon-btn"), id).toBe(true);
+        expect(button.querySelector("svg"), id).not.toBeNull();
+        expect(button.textContent, id).toBe("");
+        expect(button.title, id).toBe(button.getAttribute("aria-label"));
+      }
+    });
+
+    it("End tour is a danger action with no pressed state", () => {
+      setup();
+      const endTour = query(container, "viewing-end-tour")!;
+      expect(endTour.classList.contains("icon-btn--danger")).toBe(true);
+      expect(endTour.hasAttribute("aria-pressed")).toBe(false);
+      expect(endTour.getAttribute("aria-label")).toBe("End tour");
+    });
+
+    it("the hint's × close button is not an icon button", () => {
+      setup();
+      const close = query(container, "viewing-autopilot-hint")!.querySelector(
+        ".hud-hint-close",
+      )!;
+      expect(close.classList.contains("icon-btn")).toBe(false);
+    });
+
+    it("Buildings: busy while loading, error when failed, title mirrors aria-label", () => {
+      const { hud } = setup(true, { withOsmBuildings: true });
+      const button = query(container, "viewing-osm-buildings-toggle")!;
+
+      hud.setOsmBuildingsStatus("loading");
+      expect(button.getAttribute("aria-busy")).toBe("true");
+      expect(button.classList.contains("icon-btn--error")).toBe(false);
+      expect((button as HTMLButtonElement).disabled).toBe(false);
+
+      hud.setOsmBuildingsStatus("failed");
+      expect(button.hasAttribute("aria-busy")).toBe(false);
+      expect(button.classList.contains("icon-btn--error")).toBe(true);
+      expect(button.title).toBe("Buildings failed — tap to retry");
+
+      hud.setOsmBuildingsStatus("loaded");
+      expect(button.classList.contains("icon-btn--error")).toBe(false);
+      expect(button.getAttribute("aria-pressed")).toBe("true");
+    });
+
+    it("failed raises a one-shot notice; leaving failed clears exactly that notice", () => {
+      const { hud } = setup(true, { withOsmBuildings: true });
+      const notice = query(container, "viewing-hud-notice")!;
+
+      hud.setOsmBuildingsStatus("loading");
+      expect(notice.hidden).toBe(true);
+
+      hud.setOsmBuildingsStatus("failed");
+      expect(notice.hidden).toBe(false);
+      expect(notice.textContent).toBe(
+        "Buildings couldn't load. Tap the buildings button to retry.",
+      );
+
+      hud.setOsmBuildingsStatus("loading"); // the visitor retried
+      expect(notice.hidden).toBe(true);
+    });
+
+    it("a repeated 'failed' does not re-raise a dismissed notice, and an unrelated notice is left alone", () => {
+      const { hud } = setup(true, { withOsmBuildings: true });
+      const notice = query(container, "viewing-hud-notice")!;
+
+      hud.showNotice("Tap the screen once to allow this story to play.");
+      hud.setOsmBuildingsStatus("failed");
+      hud.setOsmBuildingsStatus("loading");
+      // The audio notice was overwritten by the buildings one; clearing must
+      // only hide a notice that still shows the buildings text.
+      expect(notice.hidden).toBe(true);
+
+      hud.showNotice("Tap the screen once to allow this story to play.");
+      hud.setOsmBuildingsStatus("loaded");
+      expect(notice.hidden).toBe(false);
+    });
+  });
 });
