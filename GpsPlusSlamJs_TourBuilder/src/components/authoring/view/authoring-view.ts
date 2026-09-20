@@ -786,7 +786,10 @@ export function mountAuthoringView(
     wrapper.className = "export-action";
 
     const exportButton = document.createElement("button");
-    exportButton.className = "primary";
+    // Secondary but full-width: Drop Waypoint is the one primary action on
+    // the screen; export is a one-off finishing step that still needs to be
+    // easy to hit.
+    exportButton.className = "export-button";
     exportButton.dataset["testid"] = "export";
     exportButton.textContent = "Export & Pack";
     wrapper.append(exportButton);
