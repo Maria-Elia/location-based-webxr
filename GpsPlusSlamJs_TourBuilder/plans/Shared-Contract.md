@@ -22,7 +22,7 @@ purpose.
 | D3 | Top-level `assets` map; each entry is `{ id, type, filename }`. | — |
 | D4 | Waypoint content uses **structured slots**, not a flat id array. `model?`/`sprite?` kept separate with an **at-most-one** invariant (validator-enforced). `transcript` is **inline text**, `audio` is an asset id. | — |
 | D5 | Positions use core `{ lat, lon, altitude? }` (`TourCoord`), structurally assignable to `LatLong`/`LatLongAlt`. Map converts to Leaflet `lng` on its side. | Avoids a lat/lon transposition bug at the one anchoring seam. |
-| D6 | `altitude` persisted but **not yet consumed** (framework floor-Y deferred). | — |
+| D6 | `altitude` persisted but **not yet consumed** (framework floor-Y deferred). | In the live AR session "not consumed" means every stop is placed on the **visitor's floor** (camera height minus phone height), not at `y = 0`: GPS-world `y` is absolute altitude there, so `0` is the ellipsoid. The desktop preview's floor is `y = 0`, so it uses `0`. |
 | D7 | `breadcrumb` is a **flat** `TourCoord[]` polyline, position-only. Segmentation is a view-time derivation. | — |
 | D8 | Waypoint order = **array order**. Stable `id` for identity. No `order` field. | — |
 | D9 | **No `schemaVersion`.** A validate-on-load step still runs (validation ≠ versioning). | Not a spec deviation — §2.2 never asks for versioning. Trade-off only: future format changes can't be detected/migrated cleanly. Acceptable for the prototype. |

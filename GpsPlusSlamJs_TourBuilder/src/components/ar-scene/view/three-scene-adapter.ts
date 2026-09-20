@@ -281,9 +281,15 @@ export function createThreeSceneAdapter(
         // local offset inside `node.group` (contract A14), so calling it would
         // apply a second, wrong rotation on top of this one and turn the panel
         // away from the camera instead of leaving it aligned with its parent.
+        //
+        // The yaw is written to a LOCAL rotation, so it must be solved in the
+        // parent's frame: on a phone the parent (`arWorldGroup`) carries the
+        // alignment matrix's arbitrary heading, and a yaw solved from world
+        // positions would be rotated by that heading again on screen.
+        const parent = node.group.parent ?? options.parent;
         node.group.rotation.y = computeBillboardYaw(
-          node.group.getWorldPosition(new Vector3()),
-          cameraPos,
+          node.group.position,
+          parent.worldToLocal(cameraPos.clone()),
           node.group.rotation.y,
         );
       }

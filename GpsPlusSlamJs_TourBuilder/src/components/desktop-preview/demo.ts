@@ -226,7 +226,9 @@ hud = mountHud(container, {
   onToggleWayfinding: () => {
     wayfindingEnabled = !wayfindingEnabled;
     tourScene.setWayfindingEnabled(wayfindingEnabled);
-    hud?.setWayfindingLabel(wayfindingEnabled ? "Stop wayfinding" : "Wayfinding");
+    hud?.setWayfindingLabel(
+      wayfindingEnabled ? "Stop wayfinding" : "Wayfinding",
+    );
     hud?.dismissWayfindingHint();
   },
 });

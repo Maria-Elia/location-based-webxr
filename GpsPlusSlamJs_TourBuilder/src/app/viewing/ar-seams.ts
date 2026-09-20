@@ -25,10 +25,15 @@
  *   the raw flag would put every waypoint on top of the visitor at session
  *   entry — the whole tour activating (and being marked visited) in the first
  *   second. The wrapper below reports anchored only once the object has
- *   actually been committed to its computed target.
+ *   actually been committed to its computed target — and then keeps
+ *   reporting it, because the anchor leaves smaller corrections unapplied.
+ * - **Altitude is not consumed (contract D6).** GPS-world `y` is absolute
+ *   altitude, so a stored altitude (one noisy fix) or a missing one (the
+ *   ellipsoid, ~100 m underground) would hide the stop. Every stop is placed
+ *   on the visitor's floor instead, refreshed each frame via `update()`.
  */
 
-import { Vector3, type Camera, type Object3D } from "three";
+import { Matrix4, Vector3, type Camera, type Object3D } from "three";
 import { calcRelativeCoordsInMeters } from "gps-plus-slam-app-framework/core";
 // Subpath imports, not the `visualization` barrel: that barrel also exports
 // the Leaflet-based map overlay, which touches `window` at import time and
@@ -41,12 +46,20 @@ import type { TourCoord } from "../../store/types.js";
 import type { SceneAnchor } from "../../components/ar-scene/view/three-scene-adapter.js";
 
 /**
- * How close the object must be to its computed target before it counts as
- * anchored. Matches `createGpsAnchor`'s own default `distanceThreshold` (2 m):
- * below that the anchor itself considers the pose committed and stops
- * correcting, so a stricter gate here would never open.
+ * How close the object must be to its computed target before it first counts
+ * as anchored. The anchor's own move threshold is `2 m × (1 + distance/10)`,
+ * so this is only checked until it passes once (see `placed` below).
  */
 const ANCHORED_TOLERANCE_M = 2;
+
+/**
+ * How far below the phone the visitor's floor is. Contract D6: stored
+ * altitudes are not consumed, so every stop stands on the visitor's floor.
+ */
+export const PHONE_HEIGHT_ABOVE_FLOOR_M = 1.4;
+
+/** Floor changes smaller than this do not re-point the anchors. */
+const FLOOR_REFRESH_TOLERANCE_M = 0.5;
 
 /** The subset of `createGpsAnchor` this module calls (test seam). */
 export type AnchorFactoryLike = (
@@ -84,29 +97,71 @@ export interface ArSeams {
   toWorld(coord: TourCoord): Vector3 | null;
   /** The visitor's world position, in the same frame as the anchors. */
   getUserWorldPos(): Vector3 | null;
+  /**
+   * Call once per frame, before the anchors tick: keeps every anchor on the
+   * visitor's floor as the alignment's vertical estimate settles.
+   */
+  update?(): void;
+}
+
+/** A stop's coordinate with the given floor as its altitude (contract D6). */
+function onFloor(coord: TourCoord, floor: number | null): TourCoord {
+  return floor === null
+    ? { lat: coord.lat, lon: coord.lon }
+    : { lat: coord.lat, lon: coord.lon, altitude: floor };
 }
 
 export function createArSeams(deps: ArSeamsDeps): ArSeams {
   const anchorFactory: AnchorFactoryLike =
     deps.createGpsAnchor ?? ((options) => createGpsAnchor(options));
   const tolerance = deps.anchoredToleranceM ?? ANCHORED_TOLERANCE_M;
-  // `getUserWorldPos` runs every frame; `toWorld` only when the trail
-  // re-windows (4 Hz), so only the former needs a reused scratch vector.
+  // `getUserWorldPos` and `floorAltitude` run every frame; `toWorld` only when
+  // the trail re-windows (4 Hz), so only the former need reused scratch.
   const userScratch = new Vector3();
+  const floorScratch = new Vector3();
+  const alignmentScratch = new Matrix4();
+  const floorRefreshers = new Set<(floor: number) => void>();
+
+  /**
+   * The visitor's floor as a GPS-world altitude (GPS-world `y` is absolute).
+   * Uses the target alignment rather than the group's mid-lerp matrix, so it
+   * agrees with what the anchors solve against.
+   */
+  function floorAltitude(): number | null {
+    const alignment = deps.getAlignmentMatrix();
+    const arWorldGroup = deps.getArWorldGroup();
+    const camera = deps.getCamera();
+    if (alignment === null || arWorldGroup === null || camera === null) {
+      return null;
+    }
+    const arLocal = arWorldGroup.worldToLocal(
+      camera.getWorldPosition(floorScratch),
+    );
+    return (
+      arLocal.applyMatrix4(alignmentScratch.fromArray(alignment)).y -
+      PHONE_HEIGHT_ABOVE_FLOOR_M
+    );
+  }
 
   function toWorld(coord: TourCoord): Vector3 | null {
     const zero = deps.getGpsZeroRef();
     const alignment = deps.getAlignmentMatrix();
     const arWorldGroup = deps.getArWorldGroup();
+    const floor = floorAltitude();
     // Any of these missing means there is no GPS-registered frame yet. A
     // position computed anyway would be expressed in the wrong frame — the
     // exact bug class `gps-anchor.ts`'s sidecar warns about — so report
     // "not known yet" instead.
-    if (zero === null || alignment === null || arWorldGroup === null) {
+    if (
+      zero === null ||
+      alignment === null ||
+      arWorldGroup === null ||
+      floor === null
+    ) {
       return null;
     }
 
-    const nue = calcRelativeCoordsInMeters(zero, coord, coord.altitude ?? 0, 0);
+    const nue = calcRelativeCoordsInMeters(zero, coord, floor, 0);
     const local = nueToArLocal(alignment, [nue[0], nue[1], nue[2]]);
     arWorldGroup.updateWorldMatrix(true, false);
     return arWorldGroup.localToWorld(local);
@@ -128,11 +183,13 @@ export function createArSeams(deps: ArSeamsDeps): ArSeams {
       throw new Error("Cannot anchor content before the AR camera exists");
     }
 
+    let requested: TourCoord = coord;
+    let floorUsed = floorAltitude();
     const anchor = anchorFactory({
       object3D,
       arWorldGroup,
       camera,
-      gpsPoint: coord,
+      gpsPoint: onFloor(coord, floorUsed),
       // R1 — the authored coordinate is the truth; never re-derive it from
       // where the mesh currently sits.
       skipBootstrap: true,
@@ -141,6 +198,22 @@ export function createArSeams(deps: ArSeamsDeps): ArSeams {
     });
 
     const objectScratch = new Vector3();
+    // Once placed, stay anchored: later corrections between the tolerance and
+    // the anchor's distance-scaled move threshold are never applied, so
+    // re-checking every frame would freeze the waypoint's zone.
+    let placed = false;
+
+    const refreshFloor = (floor: number): void => {
+      if (
+        floorUsed !== null &&
+        Math.abs(floor - floorUsed) < FLOOR_REFRESH_TOLERANCE_M
+      ) {
+        return;
+      }
+      floorUsed = floor;
+      anchor.setGpsPoint(onFloor(requested, floor));
+    };
+    floorRefreshers.add(refreshFloor);
 
     return {
       // R2 — the gate. Anchored means: the framework anchor is past its own
@@ -152,23 +225,33 @@ export function createArSeams(deps: ArSeamsDeps): ArSeams {
         if (!anchor.isFullyAnchored) return false;
         const target = toWorld(anchor.gpsPoint);
         if (target === null) return false;
+        if (placed) return true;
         object3D.updateWorldMatrix(true, false);
-        return (
+        placed =
           object3D.getWorldPosition(objectScratch).distanceTo(target) <=
-          tolerance
-        );
+          tolerance;
+        return placed;
       },
       setGpsPoint(point: TourCoord): void {
-        anchor.setGpsPoint(point);
+        requested = point;
+        placed = false;
+        anchor.setGpsPoint(onFloor(point, floorUsed));
       },
       markMovedExternally(): void {
         anchor.markMovedExternally();
       },
       dispose(): void {
+        floorRefreshers.delete(refreshFloor);
         anchor.dispose();
       },
     };
   }
 
-  return { createAnchor, toWorld, getUserWorldPos };
+  function update(): void {
+    const floor = floorAltitude();
+    if (floor === null) return;
+    for (const refresh of floorRefreshers) refresh(floor);
+  }
+
+  return { createAnchor, toWorld, getUserWorldPos, update };
 }

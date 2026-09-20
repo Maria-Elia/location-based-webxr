@@ -403,7 +403,7 @@ export function createTourScene(options: TourSceneOptions): TourScene {
     if (newlyVisited !== null) {
       store.dispatch(markBreadcrumbVisited(newlyVisited));
     }
-    const nextCoord = next === null ? null : coords[next] ?? null;
+    const nextCoord = next === null ? null : (coords[next] ?? null);
     adapter.setWayfindingTarget(
       !wayfindingEnabled || next === null || nextCoord === null
         ? null

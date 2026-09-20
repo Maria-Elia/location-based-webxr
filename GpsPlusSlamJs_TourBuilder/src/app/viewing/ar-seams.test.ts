@@ -1,9 +1,28 @@
-import { Group, Matrix4, Object3D, PerspectiveCamera, Vector3 } from "three";
+import {
+  BoxGeometry,
+  Group,
+  Matrix4,
+  Mesh,
+  Object3D,
+  PerspectiveCamera,
+  Vector3,
+} from "three";
 import { describe, expect, it, vi } from "vitest";
-import { calcRelativeCoordsInMeters } from "gps-plus-slam-app-framework/core";
+import {
+  calcGpsCoords,
+  calcRelativeCoordsInMeters,
+} from "gps-plus-slam-app-framework/core";
 import { nueToArLocal } from "gps-plus-slam-app-framework/visualization/frame-conversions";
+import {
+  createGpsAnchor,
+  type GpsAnchor,
+} from "gps-plus-slam-app-framework/visualization/gps-anchor";
 
-import { createArSeams, type AnchorFactoryLike } from "./ar-seams.js";
+import {
+  createArSeams,
+  PHONE_HEIGHT_ABOVE_FLOOR_M,
+  type AnchorFactoryLike,
+} from "./ar-seams.js";
 
 const ZERO = { lat: 48.0, lon: 11.0 };
 /** A deliberately non-identity alignment: catches frame mistakes an identity hides. */
@@ -65,12 +84,24 @@ function setup(
   return { seams, state, created };
 }
 
-/** The target the framework's own anchor math would compute for `coord`. */
+/**
+ * The visitor's floor in GPS-world metres for the default harness: the camera
+ * sits at the AR-local origin and `ALIGNMENT` has no vertical component.
+ */
+const DEFAULT_FLOOR_ALTITUDE = -PHONE_HEIGHT_ABOVE_FLOOR_M;
+
+/** The target the framework's own anchor math would compute for `coord`,
+ *  placed at the visitor's floor as contract D6 requires. */
 function expectedWorld(
   group: Group,
-  coord: { lat: number; lon: number; altitude?: number },
+  coord: { lat: number; lon: number },
 ): Vector3 {
-  const nue = calcRelativeCoordsInMeters(ZERO, coord, coord.altitude ?? 0, 0);
+  const nue = calcRelativeCoordsInMeters(
+    ZERO,
+    coord,
+    DEFAULT_FLOOR_ALTITUDE,
+    0,
+  );
   const local = nueToArLocal(ALIGNMENT, [nue[0], nue[1], nue[2]]);
   group.updateWorldMatrix(true, false);
   return group.localToWorld(local.clone());
@@ -131,6 +162,28 @@ describe("toWorld", () => {
       actual.distanceTo(expectedWorld(state.arWorldGroup!, ZERO)),
     ).toBeLessThan(1e-6);
   });
+
+  // Contract D6: altitude is persisted but not consumed. In a live session
+  // GPS-world `y` is ABSOLUTE altitude, so neither the stored value (one noisy
+  // fix) nor a missing one (y = 0, the ellipsoid) is a usable height.
+  it.each([
+    ["a stored altitude", { lat: 48.0012, lon: 11.0009, altitude: 500 }],
+    ["no altitude", { lat: 48.0012, lon: 11.0009 }],
+  ])("places a point with %s at the visitor's floor (D6)", (_label, coord) => {
+    const { seams, state } = setup();
+    state.camera!.position.set(0, 1.6, 0);
+    state.camera!.updateMatrixWorld(true);
+
+    const actual = seams.toWorld(coord)!;
+
+    expect(actual.y).toBeCloseTo(1.6 - PHONE_HEIGHT_ABOVE_FLOOR_M, 6);
+  });
+
+  it("returns null before a camera exists, since the floor is unknown", () => {
+    const { seams } = setup({ camera: null });
+
+    expect(seams.toWorld({ lat: 48.001, lon: 11.001 })).toBeNull();
+  });
 });
 
 describe("getUserWorldPos", () => {
@@ -186,7 +239,9 @@ describe("createAnchor", () => {
     anchor.markMovedExternally();
     anchor.dispose();
 
-    expect(base.setGpsPoint).toHaveBeenCalledWith({ lat: 48.003, lon: 11.003 });
+    expect(base.setGpsPoint).toHaveBeenCalledWith(
+      expect.objectContaining({ lat: 48.003, lon: 11.003 }),
+    );
     expect(base.markMovedExternally).toHaveBeenCalledOnce();
     expect(base.dispose).toHaveBeenCalledOnce();
   });
@@ -251,6 +306,9 @@ describe("createAnchor — the isFullyAnchored gate (R2/VC21)", () => {
     // Breadcrumb orbs are recycled via setGpsPoint; the gate must track that.
     const moved = { lat: 48.0025, lon: 11.0018 };
     const base = fakeAnchor({ gpsPoint: COORD });
+    base.setGpsPoint.mockImplementation((point: typeof COORD) => {
+      base.gpsPoint = point;
+    });
     const { seams, state } = setup({}, () => base);
     const object = new Object3D();
     state.arWorldGroup!.add(object);
@@ -265,7 +323,128 @@ describe("createAnchor — the isFullyAnchored gate (R2/VC21)", () => {
     object.updateMatrixWorld(true);
     expect(anchor.isFullyAnchored).toBe(true);
 
-    base.gpsPoint = moved;
+    anchor.setGpsPoint(moved);
     expect(anchor.isFullyAnchored).toBe(false);
+  });
+});
+
+/**
+ * The real framework anchor, not a fake: its distance-scaled move threshold
+ * and off-screen gate are exactly what the fakes above cannot reproduce.
+ *
+ * The alignment carries a vertical translation, as a live one does — GPS-world
+ * `y` is absolute altitude — and `arWorldGroup.matrix` holds it, as
+ * `enableArWorldGroupAlignment` makes it (without the lerp).
+ */
+describe("createAnchor — with the real framework anchor", () => {
+  const GROUND_ALTITUDE = 95;
+  const CAMERA_LOCAL_Y = 1.6;
+  const alignmentAt = (north: number, up: number, east: number) =>
+    new Matrix4().makeTranslation(north, up, east).toArray();
+  /** Due north of the zero reference: off to the camera's side, never in view. */
+  const northOf = (metres: number, extra: { altitude?: number } = {}) => ({
+    ...calcGpsCoords(ZERO, [metres, 0, 0]),
+    ...extra,
+  });
+
+  function realCase(coord: { lat: number; lon: number; altitude?: number }) {
+    const group = new Group();
+    group.matrixAutoUpdate = false;
+    const camera = new PerspectiveCamera();
+    camera.position.set(0, CAMERA_LOCAL_Y, 0);
+    group.add(camera);
+    let alignment: readonly number[] = alignmentAt(0, GROUND_ALTITUDE, 0);
+    const setAlignment = (next: readonly number[]) => {
+      alignment = next;
+      group.matrix.fromArray(next);
+      group.updateMatrixWorld(true);
+    };
+    setAlignment(alignment);
+
+    let base: GpsAnchor | null = null;
+    const seams = createArSeams({
+      getAlignmentMatrix: () => alignment,
+      getGpsZeroRef: () => ZERO,
+      getArWorldGroup: () => group,
+      getCamera: () => camera,
+      createGpsAnchor: (options) => (base = createGpsAnchor(options)),
+    });
+    const object = new Group();
+    // A built visual: the anchor's off-screen check treats an object without
+    // geometry as always in view, which would block every later correction.
+    object.add(new Mesh(new BoxGeometry(1, 1, 1)));
+    group.add(object);
+    const anchor = seams.createAnchor(object, coord);
+
+    let elapsed = 0;
+    const frames = (count: number) => {
+      for (let i = 0; i < count; i++) {
+        seams.update?.();
+        base!.__tickForTests(0.016, (elapsed += 1));
+        group.updateMatrixWorld(true);
+      }
+    };
+    const objectWorld = () => object.getWorldPosition(new Vector3());
+    const cameraWorldY = () => camera.getWorldPosition(new Vector3()).y;
+    return { anchor, frames, setAlignment, objectWorld, cameraWorldY };
+  }
+
+  it.each([
+    ["a stored altitude", northOf(30, { altitude: 34 })],
+    ["no altitude", northOf(30)],
+  ])(
+    "anchors a waypoint with %s at the visitor's floor (D6)",
+    (_label, coord) => {
+      const c = realCase(coord);
+
+      c.frames(1);
+
+      expect(c.objectWorld().y).toBeCloseTo(
+        c.cameraWorldY() - PHONE_HEIGHT_ABOVE_FLOOR_M,
+        4,
+      );
+      expect(c.objectWorld().x).toBeCloseTo(30, 3);
+    },
+  );
+
+  it("keeps the waypoint on the floor when the anchor applies a later correction", () => {
+    const c = realCase(northOf(30));
+    c.frames(1);
+
+    // 12 m north: beyond the anchor's 8 m threshold at 30 m, so it commits.
+    // 3 m up: without a floor refresh the commit would carry the stale height.
+    c.setAlignment(alignmentAt(-12, GROUND_ALTITUDE + 3, 0));
+    c.frames(1);
+
+    expect(c.objectWorld().x).toBeCloseTo(30, 3);
+    expect(c.objectWorld().y).toBeCloseTo(
+      c.cameraWorldY() - PHONE_HEIGHT_ABOVE_FLOOR_M,
+      4,
+    );
+  });
+
+  it("stays anchored through a correction too small for the anchor to apply", () => {
+    // 3 m east at 30 m: above the gate's 2 m tolerance, below the anchor's
+    // 8 m move threshold, so the anchor leaves the object where it is.
+    const c = realCase(northOf(30));
+    c.frames(1);
+    expect(c.anchor.isFullyAnchored).toBe(true);
+
+    c.setAlignment(alignmentAt(0, GROUND_ALTITUDE, 3));
+    c.frames(3);
+
+    expect(c.anchor.isFullyAnchored).toBe(true);
+  });
+
+  it("re-checks placement after the anchor is re-pointed", () => {
+    const c = realCase(northOf(30));
+    c.frames(1);
+    expect(c.anchor.isFullyAnchored).toBe(true);
+
+    c.anchor.setGpsPoint(northOf(60));
+    expect(c.anchor.isFullyAnchored).toBe(false);
+
+    c.frames(1);
+    expect(c.anchor.isFullyAnchored).toBe(true);
   });
 });
