@@ -8,11 +8,20 @@
  * blocked, map tiles unavailable).
  *
  * Knows nothing about the store or the scene — the caller (`viewing-app.ts`,
- * or the desktop-preview demo) pushes text in and reacts to the callbacks.
+ * or the desktop-preview demo) pushes state in (`setMapActive`, …; the HUD
+ * owns the wording) and reacts to the callbacks.
  * Shared under `components/` rather than `app/viewing/` because the
  * standalone desktop-preview demo (component 11) mounts the same HUD, and a
  * component may not import from `src/app/` (dependency-cruiser).
  */
+
+import {
+  autopilotLabel,
+  buildingsAppearance,
+  mapLabel,
+  wayfindingLabel,
+  type HudBuildingsStatus,
+} from "./hud-state.js";
 
 /** How long a callout hint stays up before it dismisses itself. */
 const AUTOPILOT_HINT_TIMEOUT_MS = 8000;
@@ -43,18 +52,39 @@ export interface Hud {
   /** One-shot notice: audio blocked, tiles offline, a failed asset. */
   showNotice(message: string): void;
   /** No-op unless the HUD was mounted with a map toggle. */
-  setMapToggleLabel(label: string): void;
+  setMapActive(active: boolean): void;
   /** No-op unless the HUD was mounted with an autopilot toggle. */
-  setAutopilotLabel(label: string): void;
+  setAutopilotActive(active: boolean): void;
+  setWayfindingActive(active: boolean): void;
   /** No-op unless the HUD was mounted with an OSM buildings toggle. */
-  setOsmBuildingsLabel(label: string): void;
+  setOsmBuildingsStatus(status: HudBuildingsStatus): void;
   /** Hides the one-time "try Auto-walk" callout, if it's still showing.
    *  No-op once already dismissed or when there's no autopilot toggle. */
   dismissAutopilotHint(): void;
-  setWayfindingLabel(label: string): void;
   /** Hides the one-time "try Wayfinding" callout, if it's still showing. */
   dismissWayfindingHint(): void;
   destroy(): void;
+}
+
+/** A HUD toggle whose visible wording the HUD derives from state. */
+interface Toggle {
+  readonly element: HTMLButtonElement;
+  set(label: string, pressed: boolean): void;
+}
+
+function textToggle(testid: string, label: string): Toggle {
+  const element = document.createElement("button");
+  element.dataset.testid = testid;
+  const toggle: Toggle = {
+    element,
+    set(next, pressed) {
+      element.textContent = next;
+      element.setAttribute("aria-label", next);
+      element.setAttribute("aria-pressed", String(pressed));
+    },
+  };
+  toggle.set(label, false);
+  return toggle;
 }
 
 export function mountHud(container: HTMLElement, options: HudOptions): Hud {
@@ -75,11 +105,9 @@ export function mountHud(container: HTMLElement, options: HudOptions): Hud {
   const controls = document.createElement("div");
   controls.className = "ar-hud-controls";
 
-  const mapToggle = document.createElement("button");
-  mapToggle.textContent = "Map";
-  mapToggle.dataset.testid = "viewing-map-toggle";
+  const mapToggle = textToggle("viewing-map-toggle", mapLabel(false));
   if (options.onToggleMap) {
-    mapToggle.addEventListener("click", () => options.onToggleMap?.());
+    mapToggle.element.addEventListener("click", () => options.onToggleMap?.());
   }
 
   const endTour = document.createElement("button");
@@ -89,14 +117,12 @@ export function mountHud(container: HTMLElement, options: HudOptions): Hud {
     endTour.addEventListener("click", () => options.onEndTour?.());
   }
 
-  const autopilot = document.createElement("button");
-  autopilot.textContent = "Auto-walk";
-  autopilot.dataset.testid = "viewing-autopilot";
+  const autopilot = textToggle("viewing-autopilot", autopilotLabel(false));
 
-  const wayfinding = document.createElement("button");
-  wayfinding.textContent = "Wayfinding";
-  wayfinding.dataset.testid = "viewing-wayfinding";
-  wayfinding.addEventListener("click", () => options.onToggleWayfinding());
+  const wayfinding = textToggle("viewing-wayfinding", wayfindingLabel(false));
+  wayfinding.element.addEventListener("click", () =>
+    options.onToggleWayfinding(),
+  );
 
   /**
    * A one-time callout above a toggle button rather than turning the
@@ -143,26 +169,29 @@ export function mountHud(container: HTMLElement, options: HudOptions): Hud {
     return { wrap, dismiss };
   }
 
-  const osmBuildingsToggle = document.createElement("button");
-  osmBuildingsToggle.textContent = "Buildings";
-  osmBuildingsToggle.dataset.testid = "viewing-osm-buildings-toggle";
+  const osmBuildingsToggle = textToggle(
+    "viewing-osm-buildings-toggle",
+    buildingsAppearance("off").label,
+  );
   if (options.onToggleOsmBuildings) {
-    osmBuildingsToggle.addEventListener("click", () =>
+    osmBuildingsToggle.element.addEventListener("click", () =>
       options.onToggleOsmBuildings?.(),
     );
-    controls.appendChild(osmBuildingsToggle);
+    controls.appendChild(osmBuildingsToggle.element);
   }
 
   let hideAutopilotHint: (() => void) | undefined;
   if (options.onToggleAutopilot) {
     const { wrap, dismiss } = mountHintedToggle(
-      autopilot,
+      autopilot.element,
       "viewing-autopilot-hint",
       "Try Auto-walk to move hands-free",
       AUTOPILOT_HINT_TIMEOUT_MS,
     );
     hideAutopilotHint = dismiss;
-    autopilot.addEventListener("click", () => options.onToggleAutopilot?.());
+    autopilot.element.addEventListener("click", () =>
+      options.onToggleAutopilot?.(),
+    );
     controls.appendChild(wrap);
   }
 
@@ -170,12 +199,12 @@ export function mountHud(container: HTMLElement, options: HudOptions): Hud {
   // hint bubbles are much wider than their own button and both show on
   // mount, so placing Auto-walk and Wayfinding directly adjacent makes
   // the two callouts overlap.
-  if (options.onToggleMap) controls.appendChild(mapToggle);
+  if (options.onToggleMap) controls.appendChild(mapToggle.element);
   if (options.onEndTour) controls.appendChild(endTour);
 
   const { wrap: wayfindingWrap, dismiss: hideWayfindingHint } =
     mountHintedToggle(
-      wayfinding,
+      wayfinding.element,
       "viewing-wayfinding-hint",
       "Try Wayfinding to find your way",
       WAYFINDING_HINT_TIMEOUT_MS,
@@ -194,22 +223,23 @@ export function mountHud(container: HTMLElement, options: HudOptions): Hud {
       notice.textContent = message;
       notice.hidden = false;
     },
-    setMapToggleLabel(label) {
+    setMapActive(active) {
       if (!options.onToggleMap) return;
-      mapToggle.textContent = label;
+      mapToggle.set(mapLabel(active), active);
     },
-    setAutopilotLabel(label) {
-      autopilot.textContent = label;
+    setAutopilotActive(active) {
+      autopilot.set(autopilotLabel(active), active);
     },
-    setOsmBuildingsLabel(label) {
+    setWayfindingActive(active) {
+      wayfinding.set(wayfindingLabel(active), active);
+    },
+    setOsmBuildingsStatus(buildingStatus) {
       if (!options.onToggleOsmBuildings) return;
-      osmBuildingsToggle.textContent = label;
+      const appearance = buildingsAppearance(buildingStatus);
+      osmBuildingsToggle.set(appearance.label, appearance.pressed);
     },
     dismissAutopilotHint() {
       hideAutopilotHint?.();
-    },
-    setWayfindingLabel(label) {
-      wayfinding.textContent = label;
     },
     dismissWayfindingHint() {
       hideWayfindingHint();

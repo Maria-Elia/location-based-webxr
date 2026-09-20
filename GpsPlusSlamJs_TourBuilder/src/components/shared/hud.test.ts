@@ -65,9 +65,9 @@ describe("mountHud", () => {
     expect(onEndTour).toHaveBeenCalledOnce();
   });
 
-  it("setMapToggleLabel is a harmless no-op without a map toggle", () => {
+  it("setMapActive is a harmless no-op without a map toggle", () => {
     const { hud } = setup(true, { withMap: false });
-    expect(() => hud.setMapToggleLabel("x")).not.toThrow();
+    expect(() => hud.setMapActive(true)).not.toThrow();
     expect(query(container, "viewing-map-toggle")).toBeNull();
   });
 
@@ -183,7 +183,7 @@ describe("mountHud", () => {
     }
   });
 
-  it("setStatus/showNotice/setMapToggleLabel/setAutopilotLabel update their elements", () => {
+  it("setStatus/showNotice update their elements", () => {
     const { hud } = setup();
     hud.setStatus("hello");
     expect(query(container, "viewing-hud-status")!.textContent).toBe("hello");
@@ -192,21 +192,32 @@ describe("mountHud", () => {
     hud.showNotice("careful");
     expect(query(container, "viewing-hud-notice")!.textContent).toBe("careful");
     expect(query(container, "viewing-hud-notice")!.hidden).toBe(false);
+  });
 
-    hud.setMapToggleLabel("Hide map");
-    expect(query(container, "viewing-map-toggle")!.textContent).toBe(
-      "Hide map",
-    );
+  it("toggle buttons start inactive and their label + aria-pressed follow the state setters", () => {
+    const { hud } = setup(true, { withOsmBuildings: true });
+    const map = query(container, "viewing-map-toggle")!;
+    const autopilot = query(container, "viewing-autopilot")!;
+    const wayfinding = query(container, "viewing-wayfinding")!;
 
-    hud.setAutopilotLabel("Stop auto-walk");
-    expect(query(container, "viewing-autopilot")!.textContent).toBe(
-      "Stop auto-walk",
-    );
+    expect(map.getAttribute("aria-label")).toBe("Show map");
+    expect(map.getAttribute("aria-pressed")).toBe("false");
 
-    hud.setWayfindingLabel("Stop wayfinding");
-    expect(query(container, "viewing-wayfinding")!.textContent).toBe(
-      "Stop wayfinding",
-    );
+    hud.setMapActive(true);
+    expect(map.getAttribute("aria-label")).toBe("Hide map");
+    expect(map.getAttribute("aria-pressed")).toBe("true");
+
+    hud.setAutopilotActive(true);
+    expect(autopilot.getAttribute("aria-label")).toBe("Stop auto-walk");
+    expect(autopilot.getAttribute("aria-pressed")).toBe("true");
+    hud.setAutopilotActive(false);
+    expect(autopilot.getAttribute("aria-label")).toBe("Auto-walk");
+
+    hud.setWayfindingActive(true);
+    expect(wayfinding.getAttribute("aria-label")).toBe("Stop wayfinding");
+    expect(wayfinding.getAttribute("aria-pressed")).toBe("true");
+    hud.setWayfindingActive(false);
+    expect(wayfinding.getAttribute("aria-label")).toBe("Wayfinding");
   });
 
   it("destroy() removes the whole HUD from the DOM", () => {
@@ -221,11 +232,12 @@ describe("mountHud", () => {
     expect(query(container, "viewing-osm-buildings-toggle")).toBeNull();
   });
 
-  it("renders a Buildings button, defaulting to that label, when onToggleOsmBuildings is given", () => {
+  it("renders a Buildings button, defaulting to the off state, when onToggleOsmBuildings is given", () => {
     setup(true, { withOsmBuildings: true });
     const button = query(container, "viewing-osm-buildings-toggle");
     expect(button).not.toBeNull();
-    expect(button!.textContent).toBe("Buildings");
+    expect(button!.getAttribute("aria-label")).toBe("Show buildings");
+    expect(button!.getAttribute("aria-pressed")).toBe("false");
   });
 
   it("clicking the buildings button calls onToggleOsmBuildings", () => {
@@ -234,14 +246,24 @@ describe("mountHud", () => {
     expect(onToggleOsmBuildings).toHaveBeenCalledOnce();
   });
 
-  it("setOsmBuildingsLabel updates the button's text, and is a no-op without the toggle", () => {
+  it("setOsmBuildingsStatus maps each status to label + aria-pressed, and is a no-op without the toggle", () => {
     const { hud } = setup(true, { withOsmBuildings: true });
-    hud.setOsmBuildingsLabel("Buildings: On");
-    expect(query(container, "viewing-osm-buildings-toggle")!.textContent).toBe(
-      "Buildings: On",
+    const button = query(container, "viewing-osm-buildings-toggle")!;
+
+    hud.setOsmBuildingsStatus("loaded");
+    expect(button.getAttribute("aria-label")).toBe("Hide buildings");
+    expect(button.getAttribute("aria-pressed")).toBe("true");
+
+    hud.setOsmBuildingsStatus("loading");
+    expect(button.getAttribute("aria-label")).toBe("Loading buildings…");
+    expect(button.getAttribute("aria-pressed")).toBe("false");
+
+    hud.setOsmBuildingsStatus("failed");
+    expect(button.getAttribute("aria-label")).toBe(
+      "Buildings failed — tap to retry",
     );
 
     const { hud: hudNoToggle } = setup(true, { withOsmBuildings: false });
-    expect(() => hudNoToggle.setOsmBuildingsLabel("x")).not.toThrow();
+    expect(() => hudNoToggle.setOsmBuildingsStatus("failed")).not.toThrow();
   });
 });

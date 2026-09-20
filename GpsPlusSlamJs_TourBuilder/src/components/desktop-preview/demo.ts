@@ -38,7 +38,6 @@ import { mountHud } from "../shared/hud.js";
 import type { Hud } from "../shared/hud.js";
 import { computePreviewStart } from "./core/preview-start.js";
 import { createPreviewSession } from "./view/preview-session.js";
-import type { OsmBuildingStatus } from "./view/osm-building-layer.js";
 
 const HYSTERESIS_FRACTION = 0.15; // contract D16 default
 
@@ -113,21 +112,6 @@ function isTouchPrimaryDevice(): boolean {
   if (navigator.maxTouchPoints <= 0) return false;
   if (typeof globalThis.matchMedia !== "function") return true;
   return !globalThis.matchMedia("(hover: hover)").matches;
-}
-
-/** Mirrors `viewing-app.ts`'s `osmBuildingsLabel` — kept local since a
- *  component may not import from `src/app/`. */
-function osmBuildingsLabel(buildingStatus: OsmBuildingStatus): string {
-  switch (buildingStatus) {
-    case "off":
-      return "Buildings: Off";
-    case "loaded":
-      return "Buildings: On";
-    case "failed":
-      return "Buildings: Failed (tap to retry)";
-    default:
-      return "Buildings: Loading…";
-  }
 }
 
 const assetProvider: AssetProvider = new RefCountedAssetProvider({
@@ -214,7 +198,7 @@ hud = mountHud(container, {
   onToggleAutopilot: () => {
     const next = !session.isAutopilot();
     session.setAutopilot(next);
-    hud?.setAutopilotLabel(next ? "Stop auto-walk" : "Auto-walk");
+    hud?.setAutopilotActive(next);
     hud?.dismissAutopilotHint();
   },
   onToggleOsmBuildings: () => {
@@ -226,16 +210,14 @@ hud = mountHud(container, {
   onToggleWayfinding: () => {
     wayfindingEnabled = !wayfindingEnabled;
     tourScene.setWayfindingEnabled(wayfindingEnabled);
-    hud?.setWayfindingLabel(
-      wayfindingEnabled ? "Stop wayfinding" : "Wayfinding",
-    );
+    hud?.setWayfindingActive(wayfindingEnabled);
     hud?.dismissWayfindingHint();
   },
 });
 session.onOsmBuildingsStatusChange((buildingStatus) => {
-  hud?.setOsmBuildingsLabel(osmBuildingsLabel(buildingStatus));
+  hud?.setOsmBuildingsStatus(buildingStatus);
 });
-hud.setOsmBuildingsLabel(osmBuildingsLabel(session.getOsmBuildingsStatus()));
+hud.setOsmBuildingsStatus(session.getOsmBuildingsStatus());
 
 // mapHost was already attached (above, before `createTourMap`) — just
 // unhide it now that the rest of the session furniture exists.

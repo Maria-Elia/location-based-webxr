@@ -682,9 +682,9 @@ describe("Viewing mode screen flow", () => {
     });
     // Applied from getOsmBuildingsStatus() immediately, without waiting for
     // an onOsmBuildingsStatusChange event.
-    expect(query(root, "viewing-osm-buildings-toggle")!.textContent).toBe(
-      "Buildings: Loading…",
-    );
+    expect(
+      query(root, "viewing-osm-buildings-toggle")!.getAttribute("aria-label"),
+    ).toBe("Loading buildings…");
   });
 
   it("updates the buildings label as the layer's status changes, with no notice on failure", async () => {
@@ -710,15 +710,15 @@ describe("Viewing mode screen flow", () => {
     });
 
     preview._emitOsmStatus("loaded");
-    expect(query(root, "viewing-osm-buildings-toggle")!.textContent).toBe(
-      "Buildings: On",
-    );
+    expect(
+      query(root, "viewing-osm-buildings-toggle")!.getAttribute("aria-label"),
+    ).toBe("Hide buildings");
     expect(query(root, "viewing-hud-notice")!.hidden).toBe(true);
 
     preview._emitOsmStatus("failed");
-    expect(query(root, "viewing-osm-buildings-toggle")!.textContent).toBe(
-      "Buildings: Failed (tap to retry)",
-    );
+    expect(
+      query(root, "viewing-osm-buildings-toggle")!.getAttribute("aria-label"),
+    ).toBe("Buildings failed — tap to retry");
     expect(query(root, "viewing-hud-notice")!.hidden).toBe(true);
   });
 

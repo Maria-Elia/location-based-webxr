@@ -213,21 +213,6 @@ function describeLoadFailure(error: unknown): {
  * match a touch-enabled laptop that still has a keyboard; requiring "no
  * hover" too excludes that case.
  */
-/** `viewing-app.ts` computes the label from status; `hud.ts` stays free of the enum. */
-function osmBuildingsLabel(status: OsmBuildingStatus): string {
-  switch (status) {
-    case "off":
-      return "Buildings: Off";
-    case "loaded":
-      return "Buildings: On";
-    case "failed":
-      return "Buildings: Failed (tap to retry)";
-    default:
-      // "idle" is only ever seen momentarily — the session loads straight away.
-      return "Buildings: Loading…";
-  }
-}
-
 function isTouchPrimaryDevice(): boolean {
   if (typeof navigator === "undefined") return false;
   if (navigator.maxTouchPoints <= 0) return false;
@@ -615,9 +600,7 @@ export function mountViewingApp(
       onToggleWayfinding: () => {
         wayfindingEnabled = !wayfindingEnabled;
         scene?.scene.setWayfindingEnabled(wayfindingEnabled);
-        hud?.setWayfindingLabel(
-          wayfindingEnabled ? "Stop wayfinding" : "Wayfinding",
-        );
+        hud?.setWayfindingActive(wayfindingEnabled);
         hud?.dismissWayfindingHint();
       },
       ...(options.onToggleAutopilot
@@ -698,7 +681,7 @@ export function mountViewingApp(
         if (preview === null) return;
         const next = !preview.isAutopilot();
         preview.setAutopilot(next);
-        hud?.setAutopilotLabel(next ? "Stop auto-walk" : "Auto-walk");
+        hud?.setAutopilotActive(next);
         hud?.dismissAutopilotHint();
       },
       onToggleOsmBuildings: () => {
@@ -731,7 +714,7 @@ export function mountViewingApp(
     // createPreviewSession, so the idle -> loading transition has already
     // happened and onOsmBuildingsStatusChange will not replay it.
     const applyOsmBuildingsStatus = (status: OsmBuildingStatus): void => {
-      hud?.setOsmBuildingsLabel(osmBuildingsLabel(status));
+      hud?.setOsmBuildingsStatus(status);
     };
     unsubscribeOsmBuildings = session.onOsmBuildingsStatusChange(
       applyOsmBuildingsStatus,
