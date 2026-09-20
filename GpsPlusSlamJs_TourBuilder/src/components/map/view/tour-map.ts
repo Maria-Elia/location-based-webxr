@@ -174,6 +174,24 @@ function buildWaypointIconHtml(
   return `<div style="width:${MARKER_TOUCH_TARGET_PX}px;height:${MARKER_TOUCH_TARGET_PX}px;display:flex;align-items:center;justify-content:center;">${dot}</div>`;
 }
 
+/**
+ * Show (and re-measure) or hide a map — the pairing every HUD Map toggle
+ * needs: Leaflet mis-sizes tiles unless `resize()` follows an unhide.
+ * No-op for a map that does not exist yet.
+ */
+export function applyMapVisibility(
+  map: Pick<TourMapInstance, "show" | "hide" | "resize"> | null | undefined,
+  visible: boolean,
+): void {
+  if (!map) return;
+  if (visible) {
+    map.show();
+    map.resize();
+  } else {
+    map.hide();
+  }
+}
+
 export function createTourMap(
   container: HTMLElement | null,
   options: TourMapOptions = {},

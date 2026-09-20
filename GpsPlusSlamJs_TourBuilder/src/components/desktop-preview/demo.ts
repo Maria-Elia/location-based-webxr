@@ -32,7 +32,7 @@ import { RefCountedAssetProvider } from "../cloud-loader/core/asset-provider.js"
 import { createTourScene } from "../ar-scene/runtime/tour-scene.js";
 import { createThreeSceneAdapter } from "../ar-scene/view/three-scene-adapter.js";
 import { TRAIL_ORB_POOL_SIZE } from "../ar-scene/config.js";
-import { createTourMap } from "../map/view/tour-map.js";
+import { applyMapVisibility, createTourMap } from "../map/view/tour-map.js";
 import { computeMarkerViewModels } from "../map/core/map-marker-state.js";
 import { mountHud } from "../shared/hud.js";
 import type { Hud } from "../shared/hud.js";
@@ -154,12 +154,7 @@ let mapVisible = true;
 
 function setMapVisible(visible: boolean): void {
   mapVisible = visible;
-  if (visible) {
-    map?.show();
-    map?.resize();
-  } else {
-    map?.hide();
-  }
+  applyMapVisibility(map, visible);
   hud?.setMapActive(visible);
 }
 

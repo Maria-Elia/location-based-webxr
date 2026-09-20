@@ -59,7 +59,10 @@ import type { Tour } from "../../store/types.js";
 import { mountOnboardingGate } from "../../components/onboarding/view/onboarding-view.js";
 import { openRemoteTour } from "../../components/cloud-loader/view/open-remote-tour.js";
 import { TourLoadError } from "../../components/cloud-loader/core/errors.js";
-import { createTourMap } from "../../components/map/view/tour-map.js";
+import {
+  applyMapVisibility,
+  createTourMap,
+} from "../../components/map/view/tour-map.js";
 import type { TourMapInstance } from "../../components/map/view/tour-map.js";
 import { computeMarkerViewModels } from "../../components/map/core/map-marker-state.js";
 import { createPreviewSession } from "../../components/desktop-preview/view/preview-session.js";
@@ -258,12 +261,7 @@ export function mountViewingApp(
   /** The one place `mapVisible` changes: shows/hides the map and tells the HUD. */
   function setMapVisible(visible: boolean): void {
     mapVisible = visible;
-    if (visible) {
-      map?.show();
-      map?.resize();
-    } else {
-      map?.hide();
-    }
+    applyMapVisibility(map, visible);
     hud?.setMapActive(visible);
   }
   let wayfindingEnabled = false;
