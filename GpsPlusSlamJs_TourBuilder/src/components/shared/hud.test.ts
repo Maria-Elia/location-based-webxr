@@ -347,13 +347,12 @@ describe("mountHud", () => {
       expect(close.classList.contains("icon-btn")).toBe(false);
     });
 
-    it("the hint's close glyph is an SVG (a text × sits off-centre)", () => {
+    it("the hint's close glyph is a plain × like the map popup's", () => {
       setup();
       const close = query(container, "viewing-autopilot-hint")!.querySelector(
         ".hud-hint-close",
       )!;
-      expect(close.querySelector("svg")).not.toBeNull();
-      expect(close.textContent).toBe("");
+      expect(close.textContent).toBe("\u00d7");
     });
 
     it("Buildings: busy while loading, error when failed, title mirrors aria-label", () => {
