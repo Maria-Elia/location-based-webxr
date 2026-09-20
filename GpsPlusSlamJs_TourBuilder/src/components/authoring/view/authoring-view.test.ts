@@ -404,10 +404,13 @@ describe("mountAuthoringView", () => {
     expect(textarea.value).toBe("Already written.");
   });
 
-  it("Tour Details starts collapsed and opens/closes on its header click, without losing the name field's value", () => {
+  it("Tour Details starts expanded and closes/opens on its header click, without losing the name field's value", () => {
     const { root } = harness(draft({ name: "Castle Walk" }));
     const detailsSection = () =>
       byTestId(root, "tour-details-toggle").closest(".authoring-section")!;
+    expect(detailsSection().classList.contains("open")).toBe(true);
+
+    byTestId(root, "tour-details-toggle").click();
     expect(detailsSection().classList.contains("open")).toBe(false);
 
     byTestId(root, "tour-details-toggle").click();
@@ -415,9 +418,6 @@ describe("mountAuthoringView", () => {
     expect((byTestId(root, "tour-name") as HTMLInputElement).value).toBe(
       "Castle Walk",
     );
-
-    byTestId(root, "tour-details-toggle").click();
-    expect(detailsSection().classList.contains("open")).toBe(false);
   });
 
   it("name/description inputs dispatch setTourMeta", () => {
@@ -738,6 +738,29 @@ describe("mountAuthoringView", () => {
       }),
     );
     byTestId(root, "drop-waypoint").click();
+
+    expect(byTestId(root, "waypoint-wp-1").classList.contains("open")).toBe(
+      false,
+    );
+    expect(byTestId(root, "waypoint-wp-2").classList.contains("open")).toBe(
+      true,
+    );
+  });
+
+  it("view.focusWaypoint(id) expands that card and collapses the others (waypoints created outside the card, e.g. from the map)", () => {
+    const wp = (id: string) => ({
+      id,
+      position: { lat: 1, lon: 2 },
+      prefetchRadius: 25,
+      activeRadius: 10,
+      content: {},
+    });
+    const { root, view } = harness(
+      draft({ waypoints: [wp("wp-1"), wp("wp-2")] }),
+    );
+    byTestId(root, "wp-toggle-wp-1").click();
+
+    view.focusWaypoint("wp-2");
 
     expect(byTestId(root, "waypoint-wp-1").classList.contains("open")).toBe(
       false,

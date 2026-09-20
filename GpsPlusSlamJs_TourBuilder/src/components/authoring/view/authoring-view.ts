@@ -65,6 +65,11 @@ export interface AuthoringViewDeps {
 }
 
 export interface AuthoringView {
+  /** Expands the given waypoint's card (collapsing the others) and scrolls
+   *  it into view. For waypoints created outside the card's own Drop
+   *  button — e.g. from the map popup — which the view can't otherwise
+   *  tell apart from any other store change. */
+  readonly focusWaypoint: (id: string) => void;
   readonly destroy: () => void;
 }
 
@@ -653,6 +658,21 @@ export function mountAuthoringView(
     }
   }
 
+  function focusWaypoint(id: string): void {
+    expandedId = id;
+    render();
+    // The new card is appended at the end of the list and auto-expanded,
+    // so with any other waypoints already present it renders off-screen
+    // below the fold with nothing to bring it into view — the visitor
+    // has to already know to scroll down to find what they just created.
+    const card = waypointsEl?.querySelector(`[data-testid="waypoint-${id}"]`);
+    // jsdom (unit tests) has no scrollIntoView at all, unlike most DOM
+    // APIs it at least stubs.
+    if (typeof card?.scrollIntoView === "function") {
+      card.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }
+
   function renderWaypointsSection(authoring: AuthoringSliceState): HTMLElement {
     const section = document.createElement("section");
     section.className = "authoring-section";
@@ -667,22 +687,7 @@ export function mountAuthoringView(
     dropButton.textContent = "+ Drop Waypoint";
     dropButton.addEventListener("click", () => {
       const newId = deps.session.dropWaypoint();
-      if (newId !== null) {
-        expandedId = newId;
-        render();
-        // The new card is appended at the end of the list and auto-expanded,
-        // so with any other waypoints already present it renders off-screen
-        // below the fold with nothing to bring it into view — the visitor
-        // has to already know to scroll down to find what they just created.
-        const newCard = waypointsEl?.querySelector(
-          `[data-testid="waypoint-${newId}"]`,
-        );
-        // jsdom (unit tests) has no scrollIntoView at all, unlike most DOM
-        // APIs it at least stubs.
-        if (typeof newCard?.scrollIntoView === "function") {
-          newCard.scrollIntoView({ behavior: "smooth", block: "start" });
-        }
-      }
+      if (newId !== null) focusWaypoint(newId);
     });
     heading.append(h2, dropButton);
     section.append(heading);
@@ -718,9 +723,9 @@ export function mountAuthoringView(
     const section = document.createElement("section");
     section.className = `authoring-section${tourDetailsOpen ? " open" : ""}`;
 
-    // Collapsed by default: the floating panel is small real estate and a
-    // name/description pair the author sets once shouldn't permanently
-    // outrank the waypoint list it shares the panel with. Same disclosure
+    // Expanded by default so a new author sees the name/description fields
+    // straight away; collapsible to give the waypoint list the panel's
+    // limited space once they're set. Same disclosure
     // interaction as a waypoint card (chevron rotates, body's max-height
     // opens), just under neutral `details-*` classes since this section
     // isn't waypoint-specific.
@@ -827,7 +832,7 @@ export function mountAuthoringView(
   // Immer/RTK keep untouched slices referentially stable), so editing the
   // tour name never disturbs the Waypoints section's DOM (or vice versa),
   // regardless of timing.
-  let tourDetailsOpen = false;
+  let tourDetailsOpen = true;
   let renderedName: string | undefined;
   let renderedDescription: string | undefined;
   let renderedTourDetailsOpen: boolean | undefined;
@@ -904,6 +909,7 @@ export function mountAuthoringView(
   render();
 
   return {
+    focusWaypoint,
     destroy(): void {
       unsubscribe();
       root.innerHTML = "";
