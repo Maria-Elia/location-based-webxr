@@ -39,6 +39,24 @@ const DOWN_ARROW_SVG =
 const CLOSE_X_SVG =
   '<svg width="8" height="8" viewBox="0 0 8 8" aria-hidden="true"><path d="M1 1 L7 7 M7 1 L1 7" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>';
 
+/** Minimum gap kept between a hint bubble and the viewport's left edge. */
+const HINT_EDGE_MARGIN_PX = 8;
+
+/**
+ * The bubble is right-anchored to its button, but that button may have
+ * siblings to its right, so the bubble can extend past the left edge on a
+ * narrow phone. Slide it right just enough to fit, and move the arrow the
+ * opposite way so it still points at the button.
+ */
+function keepOnScreen(hint: HTMLElement, arrow: HTMLElement): void {
+  hint.style.right = "";
+  arrow.style.right = "";
+  const overflow = HINT_EDGE_MARGIN_PX - hint.getBoundingClientRect().left;
+  if (overflow <= 0) return;
+  hint.style.right = `${-overflow}px`;
+  arrow.style.right = `calc(var(--hint-arrow-right) + ${overflow}px)`;
+}
+
 export interface HudOptions {
   /** No map toggle button unless a handler is given (e.g. the desktop-preview demo has no map). */
   readonly onToggleMap?: () => void;
@@ -216,6 +234,7 @@ export function mountHud(container: HTMLElement, options: HudOptions): Hud {
       if (phase !== "queued") return;
       phase = "shown";
       hint.hidden = false;
+      keepOnScreen(hint, hintArrow);
       timer = setTimeout(dismiss, timeoutMs);
     };
     hintClose.addEventListener("click", dismiss);
