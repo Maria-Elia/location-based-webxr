@@ -54,7 +54,8 @@ export function mountLandingScreen(
   heading.textContent = "TourBuilder";
   const tagline = document.createElement("p");
   tagline.className = "landing-tagline";
-  tagline.textContent = "Make location-based tours that support audio, text and visuals or open an existing tour.";
+  tagline.textContent =
+    "Make location-based tours that support audio, text and visuals or open an existing tour.";
   host.append(heading, tagline);
 
   const createButton = document.createElement("button");
@@ -78,8 +79,8 @@ export function mountLandingScreen(
   linkButton.setAttribute("aria-expanded", "false");
   linkButton.setAttribute("aria-controls", "landing-link-body");
 
-  // Same accordion mechanics as the authoring waypoint cards: the body
-  // animates `max-height` (not `hidden`, which can't transition), and
+  // The body animates its grid row from 0fr to 1fr (exact content height,
+  // unlike a `max-height` guess; `hidden` can't transition at all), and
   // `inert` keeps the collapsed field/button out of the tab order.
   const linkBody = document.createElement("div");
   linkBody.className = "landing-link-body";
@@ -87,7 +88,10 @@ export function mountLandingScreen(
   linkBody.inert = true;
   const linkForm = document.createElement("div");
   linkForm.className = "landing-link-form";
-  linkBody.append(linkForm);
+  const linkClip = document.createElement("div");
+  linkClip.className = "landing-link-clip";
+  linkClip.append(linkForm);
+  linkBody.append(linkClip);
 
   const linkInput = document.createElement("input");
   linkInput.type = "text";
@@ -123,7 +127,7 @@ export function mountLandingScreen(
     linkSection.classList.toggle("landing-link-section-open", open);
     linkButton.setAttribute("aria-expanded", String(open));
     linkBody.inert = !open;
-    if (open) linkInput.focus();
+    if (open) linkInput.focus({ preventScroll: true });
   });
 
   goButton.addEventListener("click", () => {

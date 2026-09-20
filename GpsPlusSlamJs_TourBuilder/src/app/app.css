@@ -429,18 +429,25 @@ p[data-testid="qr-status"] {
   transform: rotate(90deg);
 }
 
-/* Expand/collapse matches the authoring waypoint cards' `.wp-body`:
-   `max-height` from 0, 200ms on the same ease-out curve. The padding and
-   divider live on the inner `.landing-link-form` so the collapsed body is
-   truly 0px tall (padding on the clipped element itself would still show). */
+/* Expand/collapse animates the grid row 0fr -> 1fr, so the body grows to its
+   exact content height. A `max-height` guess (400px for ~200px of content)
+   makes the ease-out finish visually halfway and the collapse lag before
+   anything moves. The clip wrapper carries `overflow: hidden` + `min-height:
+   0` so the 0fr row can shrink to nothing; the padding and divider live on
+   the form inside it so the collapsed body is truly 0px tall. */
 .landing-link-body {
-  max-height: 0;
-  overflow: hidden;
-  transition: max-height 200ms cubic-bezier(0.23, 1, 0.32, 1);
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 200ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 .landing-link-section-open .landing-link-body {
-  max-height: 400px;
+  grid-template-rows: 1fr;
+}
+
+.landing-link-clip {
+  min-height: 0;
+  overflow: hidden;
 }
 
 .landing-link-form {
