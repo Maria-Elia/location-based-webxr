@@ -247,11 +247,20 @@ export function createTourMap(
       const button = document.createElement("button");
       button.type = "button";
       button.className = "primary map-pending-pin-button";
-      button.textContent = "Drop Waypoint";
+      button.textContent = "+ Drop Waypoint";
       button.addEventListener("click", () => {
         onDropWaypointHere(e.latlng.lat, e.latlng.lng);
         clearPendingPin();
       });
+      const card = document.createElement("div");
+      card.className = "map-pending-pin-card";
+      const title = document.createElement("p");
+      title.className = "map-pending-pin-title";
+      title.textContent = "New waypoint";
+      const coords = document.createElement("p");
+      coords.className = "map-pending-pin-coords";
+      coords.textContent = `${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`;
+      card.append(title, coords, button);
       pendingPinMarker = L.marker(e.latlng, {
         icon: L.divIcon({
           className: "",
@@ -261,8 +270,9 @@ export function createTourMap(
         }),
       })
         .addTo(leafletMap!)
-        .bindPopup(button, {
+        .bindPopup(card, {
           closeButton: true,
+          minWidth: 180,
           offset: [0, -PENDING_PIN_SIZE_PX],
           // Leaflet already auto-pans the map to keep a just-opened popup
           // on screen — tell it the bottom sheet's live height counts as
