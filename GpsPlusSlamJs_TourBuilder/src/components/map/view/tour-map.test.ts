@@ -371,8 +371,11 @@ describe("createTourMap", () => {
     const pin = markerInstances[0]!;
     expect(pin.openPopup).toHaveBeenCalledOnce();
 
-    const button = pin.bindPopup.mock.calls[0]![0] as HTMLButtonElement;
-    expect(button.textContent).toBe("Drop Waypoint");
+    const card = pin.bindPopup.mock.calls[0]![0] as HTMLElement;
+    expect(card.textContent).toContain("New waypoint");
+    expect(card.textContent).toContain("1.00000, 2.00000");
+    const button = card.querySelector("button")!;
+    expect(button.textContent).toBe("+ Drop Waypoint");
     button.click();
 
     expect(onDropWaypointHere).toHaveBeenCalledWith(1, 2);

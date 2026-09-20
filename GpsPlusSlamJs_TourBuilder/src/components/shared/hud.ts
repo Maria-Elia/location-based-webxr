@@ -30,15 +30,6 @@ import { createIconButton } from "./icon-button.js";
 const AUTOPILOT_HINT_TIMEOUT_MS = 8000;
 const WAYFINDING_HINT_TIMEOUT_MS = 8000;
 
-/** A small downward-pointing chevron — the hint bubble sits above the
- *  button and needs to visually point down at it. */
-const DOWN_ARROW_SVG =
-  '<svg width="14" height="14" viewBox="0 0 12 12"><path d="M2 4 L6 9 L10 4" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-
-/** The hint's close glyph as SVG: a text "×" sits off-centre in its line box. */
-const CLOSE_X_SVG =
-  '<svg width="8" height="8" viewBox="0 0 8 8" aria-hidden="true"><path d="M1 1 L7 7 M7 1 L1 7" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>';
-
 /** Minimum gap kept between a hint bubble and the viewport's left edge. */
 const HINT_EDGE_MARGIN_PX = 8;
 
@@ -213,10 +204,9 @@ export function mountHud(container: HTMLElement, options: HudOptions): Hud {
     hintClose.type = "button";
     hintClose.className = "hud-hint-close";
     hintClose.setAttribute("aria-label", "Dismiss");
-    hintClose.innerHTML = CLOSE_X_SVG;
+    hintClose.textContent = "\u00d7";
     const hintArrow = document.createElement("span");
     hintArrow.className = "hud-hint-arrow";
-    hintArrow.innerHTML = DOWN_ARROW_SVG;
 
     hint.append(hintTextEl, hintClose, hintArrow);
 
