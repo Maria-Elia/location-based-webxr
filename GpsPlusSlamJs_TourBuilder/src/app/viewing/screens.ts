@@ -122,9 +122,15 @@ export function mountTourEntryScreen(
     options.visitedCount > 0
       ? `${options.waypointCount} stops · ${options.visitedCount} already visited`
       : `${options.waypointCount} stops`,
-    "muted",
+    "tour-summary",
   );
   summary.dataset.testid = "viewing-tour-summary";
+
+  // Name and stop count share one row so the count doesn't cost a line of
+  // its own.
+  const titleRow = document.createElement("div");
+  titleRow.className = "tour-title-row";
+  titleRow.append(title, summary);
 
   const offline = paragraph("", "success-banner");
   offline.dataset.testid = "viewing-offline-ready";
@@ -155,7 +161,8 @@ export function mountTourEntryScreen(
   restart.addEventListener("click", () => options.onRestartTour());
 
   element.append(
-    ...[title, description, summary].filter((n) => n !== undefined),
+    titleRow,
+    ...(description === undefined ? [] : [description]),
     options.mapHost,
     enterAr,
     status,
