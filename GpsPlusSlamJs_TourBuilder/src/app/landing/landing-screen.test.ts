@@ -34,6 +34,21 @@ afterEach(() => {
 });
 
 describe("mountLandingScreen", () => {
+  it("titles the page with the app name and a tagline", () => {
+    const { root } = setup();
+    expect(root.querySelector("h1")!.textContent).toBe("TourBuilder");
+    expect(root.querySelector(".landing-tagline")!.textContent).not.toBe("");
+  });
+
+  it("groups the demo link and the link toggle in one card", () => {
+    const { root } = setup();
+    const card = root.querySelector(".landing-link-section")!;
+    expect(card.querySelector('[data-testid="view-demo-tour"]')).not.toBeNull();
+    expect(
+      card.querySelector('[data-testid="landing-open-link-form"]'),
+    ).not.toBeNull();
+  });
+
   it("renders the create-tour action, the link form (collapsed), the demo chip, and the components link", () => {
     const { root } = setup();
 
