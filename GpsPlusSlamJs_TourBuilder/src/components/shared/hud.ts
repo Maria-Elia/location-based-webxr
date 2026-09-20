@@ -35,6 +35,10 @@ const WAYFINDING_HINT_TIMEOUT_MS = 8000;
 const DOWN_ARROW_SVG =
   '<svg width="14" height="14" viewBox="0 0 12 12"><path d="M2 4 L6 9 L10 4" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
+/** The hint's close glyph as SVG: a text "×" sits off-centre in its line box. */
+const CLOSE_X_SVG =
+  '<svg width="8" height="8" viewBox="0 0 8 8" aria-hidden="true"><path d="M1 1 L7 7 M7 1 L1 7" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>';
+
 export interface HudOptions {
   /** No map toggle button unless a handler is given (e.g. the desktop-preview demo has no map). */
   readonly onToggleMap?: () => void;
@@ -191,7 +195,7 @@ export function mountHud(container: HTMLElement, options: HudOptions): Hud {
     hintClose.type = "button";
     hintClose.className = "hud-hint-close";
     hintClose.setAttribute("aria-label", "Dismiss");
-    hintClose.textContent = "×";
+    hintClose.innerHTML = CLOSE_X_SVG;
     const hintArrow = document.createElement("span");
     hintArrow.className = "hud-hint-arrow";
     hintArrow.innerHTML = DOWN_ARROW_SVG;

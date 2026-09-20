@@ -347,6 +347,15 @@ describe("mountHud", () => {
       expect(close.classList.contains("icon-btn")).toBe(false);
     });
 
+    it("the hint's close glyph is an SVG (a text × sits off-centre)", () => {
+      setup();
+      const close = query(container, "viewing-autopilot-hint")!.querySelector(
+        ".hud-hint-close",
+      )!;
+      expect(close.querySelector("svg")).not.toBeNull();
+      expect(close.textContent).toBe("");
+    });
+
     it("Buildings: busy while loading, error when failed, title mirrors aria-label", () => {
       const { hud } = setup(true, { withOsmBuildings: true });
       const button = query(container, "viewing-osm-buildings-toggle")!;

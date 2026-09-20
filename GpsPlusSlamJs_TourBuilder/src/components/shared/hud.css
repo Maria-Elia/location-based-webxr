@@ -63,8 +63,10 @@
 .hud-hint {
   position: absolute;
   bottom: calc(100% + 10px);
-  left: 50%;
-  transform: translateX(-50%);
+  /* Right-anchored, not centred: the buttons sit at the right edge, so a
+     centred 220px bubble would hang off-screen. The arrow is offset to
+     stay over the button instead. */
+  right: 0;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -76,7 +78,10 @@
   font-size: 12px;
   font-weight: 500;
   /* Wraps rather than a fixed nowrap line — a phone-width viewport can be
-     narrower than the hint text itself, centered or not. */
+     narrower than the hint text itself. `max-content` is required: an
+     absolute box otherwise shrink-to-fits the ~40px button-wide wrap and
+     breaks the text one word per line; max-width then caps it. */
+  width: max-content;
   max-width: min(220px, calc(100vw - 24px));
   box-shadow: 0 4px 12px rgb(0 0 0 / 40%);
   animation: hud-hint-in var(--duration-base, 200ms)
@@ -111,8 +116,6 @@
   background: rgb(255 255 255 / 20%);
   border-radius: 50%;
   color: white;
-  font-size: 12px;
-  line-height: 1;
 }
 
 .hud-hint-close::before {
@@ -121,27 +124,32 @@
   inset: -8px;
 }
 
-.hud-hint-close:hover {
+.hud-hint-close:hover:not(:disabled) {
   background: rgb(255 255 255 / 32%);
 }
 
 .hud-hint-arrow {
   position: absolute;
   top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
+  right: 12px; /* centre (19px) ≈ the 40px button's centre */
   color: var(--primary, #3d5488);
   line-height: 0;
+}
+
+@media (pointer: coarse) {
+  .hud-hint-arrow {
+    right: 17px; /* 48px coarse-pointer button */
+  }
 }
 
 @keyframes hud-hint-in {
   from {
     opacity: 0;
-    transform: translate(-50%, 6px);
+    transform: translateY(6px);
   }
   to {
     opacity: 1;
-    transform: translate(-50%, 0);
+    transform: translateY(0);
   }
 }
 
