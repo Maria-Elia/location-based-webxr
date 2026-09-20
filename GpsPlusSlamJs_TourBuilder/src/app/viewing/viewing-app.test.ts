@@ -19,6 +19,7 @@ import { TourLoadError } from "../../components/cloud-loader/core/errors.js";
 import type { AssetProvider, Tour } from "../../store/types.js";
 import { mountViewingApp, type ViewingAppDeps } from "./viewing-app.js";
 import type { ProgressStorage } from "./progress-store.js";
+import type { VisitorFix } from "./start-distance.js";
 
 interface PermissionStatus {
   supported: boolean;
@@ -235,7 +236,31 @@ function testDeps(
       dispose: vi.fn(),
     })),
     progressStorage: fakeStorage(),
+    // Most tests are not about distance: no fix, so the entry screen behaves
+    // exactly as it did before the start-distance gate existed.
+    locateVisitor: vi.fn(() => ({
+      result: Promise.resolve(null),
+      cancel: vi.fn(),
+    })),
     ...overrides,
+  };
+}
+
+/** A `locateVisitor` whose answer the test delivers when it chooses. */
+function controllableLocate() {
+  const settlers: Array<(fix: VisitorFix | null) => void> = [];
+  const cancel = vi.fn();
+  const locateVisitor = vi.fn(() => ({
+    result: new Promise<VisitorFix | null>((resolve) => {
+      settlers.push(resolve);
+    }),
+    cancel,
+  }));
+  return {
+    locateVisitor: locateVisitor as unknown as ViewingAppDeps["locateVisitor"],
+    calls: locateVisitor,
+    cancel,
+    settle: (fix: VisitorFix | null) => settlers.at(-1)!(fix),
   };
 }
 
@@ -505,6 +530,13 @@ describe("Viewing mode screen flow", () => {
     // IDLE (component 8 dispatches initZones on mount) while visited ids
     // survive — a waypoint the visitor is standing next to must be re-crossed,
     // not silently already ACTIVE.
+    // The entry screen re-checks how far the visitor is from the start, so
+    // Enter AR is briefly held back before it enables again.
+    await vi.waitFor(() => {
+      expect(
+        (query(root, "viewing-enter-ar") as HTMLButtonElement).disabled,
+      ).toBe(false);
+    });
     (query(root, "viewing-enter-ar") as HTMLButtonElement).click();
     await vi.waitFor(() => {
       expect(startArScene).toHaveBeenCalledTimes(2);
@@ -798,5 +830,192 @@ describe("Viewing mode screen flow", () => {
       expect(query(root, "viewing-tour-summary")!.textContent).toBe("2 stops");
     });
     expect(storage.getItem("tour:tour-castle")).toBeNull();
+  });
+});
+
+// The tour's start is its first stop here (no breadcrumb): 48.0 N, 11.0 E.
+const AT_START: VisitorFix = { lat: 48.0, lon: 11.0, accuracy: 5 };
+/** ~100 m north of the start. */
+const HUNDRED_M_AWAY: VisitorFix = { lat: 48.0009, lon: 11.0, accuracy: 5 };
+const OTHER_CONTINENT: VisitorFix = {
+  lat: 40.7128,
+  lon: -74.006,
+  accuracy: 20,
+};
+
+describe("Start-distance gate on the entry screen", () => {
+  let root: HTMLDivElement;
+
+  beforeEach(() => {
+    vi.stubGlobal("AudioContext", FakeAudioContext);
+    root = document.createElement("div");
+    document.body.appendChild(root);
+  });
+
+  afterEach(() => {
+    root.remove();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  async function openEntry(
+    locate: ReturnType<typeof controllableLocate>,
+    controllerStatus: ControllerStatus = "ready",
+    depOverrides: Partial<ViewingAppDeps> = {},
+  ) {
+    const { controller } = fakeController({ status: controllerStatus });
+    const deps = testDeps({
+      locateVisitor: locate.locateVisitor,
+      ...depOverrides,
+    });
+    const app = mountViewingApp(root, "https://host.example/tour.zip", {
+      ...deps,
+      createController: () => controller as never,
+    });
+    await vi.waitFor(() => {
+      expect(query(root, "grant-access")).not.toBeNull();
+    });
+    await completeOnboarding(root);
+    return { app, deps };
+  }
+
+  const enterAr = () => query(root, "viewing-enter-ar") as HTMLButtonElement;
+  const status = () => query(root, "viewing-ar-status")!;
+  const previewButton = () => query(root, "viewing-enter-preview");
+
+  it("holds Enter AR back while it checks how far the visitor is", async () => {
+    const locate = controllableLocate();
+    await openEntry(locate);
+
+    await vi.waitFor(() => {
+      expect(locate.calls).toHaveBeenCalledTimes(1);
+    });
+    expect(enterAr().disabled).toBe(true);
+    expect(status().textContent).toContain("Checking how far you are");
+  });
+
+  it("near the start: plain Enter AR, no notice, no second button", async () => {
+    const locate = controllableLocate();
+    await openEntry(locate);
+    await vi.waitFor(() => expect(locate.calls).toHaveBeenCalled());
+
+    locate.settle(AT_START);
+
+    await vi.waitFor(() => {
+      expect(enterAr().disabled).toBe(false);
+    });
+    expect(enterAr().hidden).toBe(false);
+    expect(status().hidden).toBe(true);
+    expect(previewButton()).toBeNull();
+  });
+
+  it("50–300 m away: offers both, and says how far", async () => {
+    const locate = controllableLocate();
+    await openEntry(locate);
+    await vi.waitFor(() => expect(locate.calls).toHaveBeenCalled());
+
+    locate.settle(HUNDRED_M_AWAY);
+
+    await vi.waitFor(() => {
+      expect(previewButton()).not.toBeNull();
+    });
+    expect(enterAr().hidden).toBe(false);
+    expect(enterAr().disabled).toBe(false);
+    expect(status().textContent).toBe("The start of this tour is 100 m away.");
+  });
+
+  it("over 300 m away: takes AR away and makes Preview here the way in", async () => {
+    const locate = controllableLocate();
+    await openEntry(locate);
+    await vi.waitFor(() => expect(locate.calls).toHaveBeenCalled());
+
+    locate.settle(OTHER_CONTINENT);
+
+    await vi.waitFor(() => {
+      expect(enterAr().hidden).toBe(true);
+    });
+    expect(previewButton()!.className).toContain("primary");
+    expect(previewButton()!.textContent).toBe("Preview here");
+    expect(status().textContent).toContain("Preview it from here");
+  });
+
+  it("never takes AR away without a fix", async () => {
+    const locate = controllableLocate();
+    await openEntry(locate);
+    await vi.waitFor(() => expect(locate.calls).toHaveBeenCalled());
+
+    locate.settle(null);
+
+    await vi.waitFor(() => {
+      expect(enterAr().disabled).toBe(false);
+    });
+    expect(enterAr().hidden).toBe(false);
+    expect(previewButton()).toBeNull();
+    expect(status().hidden).toBe(true);
+  });
+
+  it("does not even look for the visitor where AR is unsupported", async () => {
+    const locate = controllableLocate();
+    await openEntry(locate, "unsupported");
+
+    expect(locate.calls).not.toHaveBeenCalled();
+    expect(previewButton()).not.toBeNull();
+    expect(enterAr().disabled).toBe(true);
+  });
+
+  it("Preview here from far away starts the preview", async () => {
+    const locate = controllableLocate();
+    const createPreviewSession = vi.fn(() => fakePreviewSession());
+    await openEntry(locate, "ready", {
+      createPreviewSession:
+        createPreviewSession as unknown as ViewingAppDeps["createPreviewSession"],
+    });
+    await vi.waitFor(() => expect(locate.calls).toHaveBeenCalled());
+    locate.settle(OTHER_CONTINENT);
+    await vi.waitFor(() => expect(previewButton()).not.toBeNull());
+
+    previewButton()!.click();
+
+    await vi.waitFor(() => {
+      expect(createPreviewSession).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("checks again when the visitor comes back from the preview", async () => {
+    const locate = controllableLocate();
+    await openEntry(locate);
+    await vi.waitFor(() => expect(locate.calls).toHaveBeenCalledTimes(1));
+    locate.settle(OTHER_CONTINENT);
+    await vi.waitFor(() => expect(previewButton()).not.toBeNull());
+    previewButton()!.click();
+    await vi.waitFor(() => {
+      expect(query(root, "viewing-end-tour")).not.toBeNull();
+    });
+
+    (query(root, "viewing-end-tour") as HTMLButtonElement).click();
+
+    await vi.waitFor(() => {
+      expect(locate.calls).toHaveBeenCalledTimes(2);
+    });
+    expect(enterAr().disabled).toBe(true); // locating again
+  });
+
+  it("stops looking when the visitor leaves the entry screen", async () => {
+    const locate = controllableLocate();
+    const { app } = await openEntry(locate);
+    await vi.waitFor(() => expect(locate.calls).toHaveBeenCalled());
+
+    app.destroy();
+
+    expect(locate.cancel).toHaveBeenCalled();
+  });
+
+  it("ignores a fix that arrives after the screen has gone", async () => {
+    const locate = controllableLocate();
+    const { app } = await openEntry(locate);
+    await vi.waitFor(() => expect(locate.calls).toHaveBeenCalled());
+    app.destroy();
+
+    expect(() => locate.settle(OTHER_CONTINENT)).not.toThrow();
   });
 });

@@ -28,6 +28,15 @@ export interface PreviewStart {
   readonly route: readonly TourCoord[];
 }
 
+/**
+ * Where the tour starts: the author's trailhead when there is a breadcrumb,
+ * otherwise the first stop. The preview starts here, and the viewing entry
+ * screen measures the visitor's distance to it — one definition for both.
+ */
+export function tourStartCoord(tour: Tour): TourCoord | undefined {
+  return tour.breadcrumb[0] ?? tour.waypoints[0]?.position;
+}
+
 export function computePreviewStart(tour: Tour): PreviewStart {
   const trailhead = tour.breadcrumb[0];
   const firstStop = tour.waypoints[0]?.position;
@@ -40,7 +49,7 @@ export function computePreviewStart(tour: Tour): PreviewStart {
     };
   }
 
-  const anchorCoord = trailhead ?? firstStop!;
+  const anchorCoord = tourStartCoord(tour)!;
   const origin = { lat: anchorCoord.lat, lon: anchorCoord.lon };
   const frame = createPreviewFrame(origin);
 

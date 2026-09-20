@@ -8,6 +8,8 @@ and its own tests; nothing here is imported by `src/components/`.
 ?tour=<zipUrl>  →  cloud-loader (6)  →  onboarding gate (9)  →  Enter AR  →  AR scene (8)
                                                           └→ Desktop preview (11) ↗  + proximity (4)
                                                                               + map (7)
+                                         (entry screen measures the visitor's distance to the
+                                          tour's start and decides which of the two is offered)
 ```
 
 Plan: [`plans/2026-08-14-viewing-composition-plan.md`](../../../plans/2026-08-14-viewing-composition-plan.md)
@@ -15,14 +17,16 @@ Plan: [`plans/2026-08-14-viewing-composition-plan.md`](../../../plans/2026-08-14
 
 ## Modules
 
-| Path                  | What lives here                                                                                                                      |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `viewing-app.ts`      | The sequencer: screens, error states, the AR entry gesture, session lifecycle, progress persistence. The only stateful file here.    |
-| `ar-seams.ts`         | The three seams component 8 injects — `createAnchor`, `toWorld`, `getUserWorldPos`. The single geo→world step §2.5.1 permits.        |
-| `ar-scene-runtime.ts` | Builds/tears down the live scene inside a session: alignment binding, audio listener, adapter (incl. the XR select ray), frame tick. |
-| `audio-listener.ts`   | Hands the gate's unlocked `AudioContext` to three the one way that actually works (see below).                                       |
-| `progress-store.ts`   | Visited waypoints in `localStorage`, so a reload or an evicted tab does not lose the visitor's place.                                |
-| `screens.ts`          | The non-immersive screens. Plain DOM, no store, no framework.                                                                        |
+| Path                  | What lives here                                                                                                                       |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `viewing-app.ts`      | The sequencer: screens, error states, the AR entry gesture, session lifecycle, progress persistence. The only stateful file here.     |
+| `ar-seams.ts`         | The three seams component 8 injects — `createAnchor`, `toWorld`, `getUserWorldPos`. The single geo→world step §2.5.1 permits.         |
+| `ar-scene-runtime.ts` | Builds/tears down the live scene inside a session: alignment binding, audio listener, adapter (incl. the XR select ray), frame tick.  |
+| `audio-listener.ts`   | Hands the gate's unlocked `AudioContext` to three the one way that actually works (see below).                                        |
+| `progress-store.ts`   | Visited waypoints in `localStorage`, so a reload or an evicted tab does not lose the visitor's place.                                 |
+| `screens.ts`          | The non-immersive screens. Plain DOM, no store, no framework.                                                                         |
+| `start-distance.ts`   | Pure: how far the visitor is from the tour's start (near / mid / far / unknown) and `deriveEntryView`, the whole entry-screen policy. |
+| `locate-visitor.ts`   | A short-lived `watchPosition` read for the entry screen, on its own handle — not the framework's singleton `startGpsWatch`.           |
 
 The in-session HUD (`mountHud`) lives in
 [`src/components/shared/hud.ts`](../../components/shared/hud.ts), not here —
@@ -34,6 +38,23 @@ desktop preview instead of a dead end: `viewing-app.ts` swaps component 11's
 session in as the `ArRuntime` + seams and `startArScene` builds the _same_
 scene — same proximity, same assets, same audio, same taps. `&preview=1`
 offers it even where AR works.
+
+The entry screen also decides by **distance** (plan
+[`2026-09-20-start-distance-gate-plan.md`](../../../plans/2026-09-20-start-distance-gate-plan.md)).
+After the gate, one short GPS read measures the visitor against the tour's
+start (`tourStartCoord`: the trailhead, else the first stop):
+
+| Visitor → start     | Entry screen                                                      |
+| ------------------- | ----------------------------------------------------------------- |
+| under 50 m          | Unchanged: Enter AR                                               |
+| 50–300 m            | Enter AR **and** Preview here, with "The start … is 140 m away."  |
+| over 300 m          | **Preview here only** — AR removed, nothing there could ever fire |
+| no fix / coarse fix | Unchanged: Enter AR. A missing fix never takes AR away.           |
+
+"Far" needs only a lower bound (`distance − accuracy > 300 m`), so a coarse
+indoor fix from another continent is still far; near/mid need accuracy ≤ 50 m.
+Decided once per entry-screen mount; returning from the preview re-checks.
+Skipped where AR is unsupported.
 
 ## Three things that are easy to get wrong here
 
