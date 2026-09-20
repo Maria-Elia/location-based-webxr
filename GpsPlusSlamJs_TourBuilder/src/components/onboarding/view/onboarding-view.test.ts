@@ -233,3 +233,35 @@ describe("mountOnboardingGate", () => {
     gate.destroy();
   });
 });
+
+describe("mountOnboardingGate with required: ['gps']", () => {
+  function gpsOnlyHarness() {
+    const root = document.createElement("div");
+    document.body.append(root);
+    const onComplete = vi.fn();
+    const gate = mountOnboardingGate(root, {
+      required: ["gps"],
+      checkGeolocationPermission: () =>
+        Promise.resolve<PermissionStatus>({ supported: true, granted: false }),
+      requestGeolocationPermission: () => granted(),
+      createAudioContext: () => makeAudioContext(),
+      onComplete,
+    });
+    return { root, gate, onComplete };
+  }
+
+  it("renders no camera row", () => {
+    const { root, gate } = gpsOnlyHarness();
+    expect(root.querySelector('[data-testid="row-camera"]')).toBeNull();
+    expect(root.querySelector('[data-testid="row-gps"]')).not.toBeNull();
+    gate.destroy();
+  });
+
+  it("enables Start after granting GPS alone", async () => {
+    const { root, gate } = gpsOnlyHarness();
+    await vi.waitFor(() => expect(grantButton(root).disabled).toBe(false));
+    grantButton(root).click();
+    await vi.waitFor(() => expect(startButton(root).disabled).toBe(false));
+    gate.destroy();
+  });
+});

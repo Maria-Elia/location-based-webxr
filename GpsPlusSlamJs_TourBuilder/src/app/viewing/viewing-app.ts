@@ -59,7 +59,10 @@ import type { Tour } from "../../store/types.js";
 import { mountOnboardingGate } from "../../components/onboarding/view/onboarding-view.js";
 import { openRemoteTour } from "../../components/cloud-loader/view/open-remote-tour.js";
 import { TourLoadError } from "../../components/cloud-loader/core/errors.js";
-import { createTourMap } from "../../components/map/view/tour-map.js";
+import {
+  applyMapVisibility,
+  createTourMap,
+} from "../../components/map/view/tour-map.js";
 import type { TourMapInstance } from "../../components/map/view/tour-map.js";
 import { computeMarkerViewModels } from "../../components/map/core/map-marker-state.js";
 import { createPreviewSession } from "../../components/desktop-preview/view/preview-session.js";
@@ -213,21 +216,6 @@ function describeLoadFailure(error: unknown): {
  * match a touch-enabled laptop that still has a keyboard; requiring "no
  * hover" too excludes that case.
  */
-/** `viewing-app.ts` computes the label from status; `hud.ts` stays free of the enum. */
-function osmBuildingsLabel(status: OsmBuildingStatus): string {
-  switch (status) {
-    case "off":
-      return "Buildings: Off";
-    case "loaded":
-      return "Buildings: On";
-    case "failed":
-      return "Buildings: Failed (tap to retry)";
-    default:
-      // "idle" is only ever seen momentarily — the session loads straight away.
-      return "Buildings: Loading…";
-  }
-}
-
 function isTouchPrimaryDevice(): boolean {
   if (typeof navigator === "undefined") return false;
   if (navigator.maxTouchPoints <= 0) return false;
@@ -270,6 +258,12 @@ export function mountViewingApp(
   let unsubscribeTracking: (() => void) | null = null;
   let unsubscribeOsmBuildings: (() => void) | null = null;
   let mapVisible = false;
+  /** The one place `mapVisible` changes: shows/hides the map and tells the HUD. */
+  function setMapVisible(visible: boolean): void {
+    mapVisible = visible;
+    applyMapVisibility(map, visible);
+    hud?.setMapActive(visible);
+  }
   let wayfindingEnabled = false;
   let destroyed = false;
   // How far the visitor is from the tour's start, as the entry screen last
@@ -430,9 +424,7 @@ export function mountViewingApp(
     // mapHost is now parented at its final layout position (inside `entry`'s
     // element) — only now does Leaflet's size measurement give a real box.
     ensureMap();
-    map?.show();
-    map?.resize();
-    mapVisible = true;
+    setMapVisible(true);
 
     // Hold Enter AR until we know how far the visitor is from the start — but
     // only where AR could run at all; a tour with no position has no start.
@@ -599,15 +591,7 @@ export function mountViewingApp(
     clearScreen();
     wayfindingEnabled = false;
     hud = mountHud(arHost, {
-      onToggleMap: () => {
-        mapVisible = !mapVisible;
-        if (mapVisible) {
-          map?.show();
-          map?.resize();
-        } else {
-          map?.hide();
-        }
-      },
+      onToggleMap: () => setMapVisible(!mapVisible),
       onEndTour: options.onEndTour,
       // Available in both AR and preview (unlike autopilot, which only
       // makes sense in preview) — an opt-in aid, off at the start of every
@@ -615,9 +599,7 @@ export function mountViewingApp(
       onToggleWayfinding: () => {
         wayfindingEnabled = !wayfindingEnabled;
         scene?.scene.setWayfindingEnabled(wayfindingEnabled);
-        hud?.setWayfindingLabel(
-          wayfindingEnabled ? "Stop wayfinding" : "Wayfinding",
-        );
+        hud?.setWayfindingActive(wayfindingEnabled);
         hud?.dismissWayfindingHint();
       },
       ...(options.onToggleAutopilot
@@ -628,9 +610,7 @@ export function mountViewingApp(
         : {}),
     });
     arHost.appendChild(mapHost);
-    map?.show();
-    map?.resize();
-    mapVisible = true;
+    setMapVisible(true);
   }
 
   /** VC14: persist as the walk progresses, not only at the end. */
@@ -698,7 +678,7 @@ export function mountViewingApp(
         if (preview === null) return;
         const next = !preview.isAutopilot();
         preview.setAutopilot(next);
-        hud?.setAutopilotLabel(next ? "Stop auto-walk" : "Auto-walk");
+        hud?.setAutopilotActive(next);
         hud?.dismissAutopilotHint();
       },
       onToggleOsmBuildings: () => {
@@ -731,7 +711,7 @@ export function mountViewingApp(
     // createPreviewSession, so the idle -> loading transition has already
     // happened and onOsmBuildingsStatusChange will not replay it.
     const applyOsmBuildingsStatus = (status: OsmBuildingStatus): void => {
-      hud?.setOsmBuildingsLabel(osmBuildingsLabel(status));
+      hud?.setOsmBuildingsStatus(status);
     };
     unsubscribeOsmBuildings = session.onOsmBuildingsStatusChange(
       applyOsmBuildingsStatus,

@@ -22,7 +22,8 @@ import {
   canStart,
   explanationFor,
   gateReducer,
-  initialGateState,
+  ALL_PERMISSIONS,
+  createInitialGateState,
   type GateAction,
   type GateState,
   type PermissionState,
@@ -36,9 +37,14 @@ import {
 } from "./onboarding-adapter.js";
 
 export interface OnboardingGateDeps {
-  readonly checkCameraPermission: () => Promise<PermissionStatus>;
+  /** Permissions Start waits on; defaults to camera + GPS. Authoring passes
+   *  `["gps"]` — it never opens the camera — and may omit the camera deps. */
+  readonly required?: readonly PermissionKind[];
+  readonly checkCameraPermission?:
+    (() => Promise<PermissionStatus>) | undefined;
   readonly checkGeolocationPermission: () => Promise<PermissionStatus>;
-  readonly requestCameraPermission: () => Promise<PermissionStatus>;
+  readonly requestCameraPermission?:
+    (() => Promise<PermissionStatus>) | undefined;
   readonly requestGeolocationPermission: () => Promise<PermissionStatus>;
   /** Injected so tests never touch real Web Audio. */
   readonly createAudioContext: () => AudioContext;
@@ -123,7 +129,8 @@ export function mountOnboardingGate(
   root: HTMLElement,
   deps: OnboardingGateDeps,
 ): OnboardingGate {
-  let state: GateState = initialGateState;
+  const required = deps.required ?? ALL_PERMISSIONS;
+  let state: GateState = createInitialGateState(required);
   let destroyed = false;
 
   const cameraRow = buildRow("camera");
@@ -140,7 +147,8 @@ export function mountOnboardingGate(
 
   const permList = document.createElement("div");
   permList.className = "perm-list";
-  permList.append(cameraRow.root, gpsRow.root);
+  if (required.includes("camera")) permList.append(cameraRow.root);
+  permList.append(gpsRow.root);
 
   root.append(permList, grantButton, startButton);
 
@@ -152,6 +160,7 @@ export function mountOnboardingGate(
   };
 
   const adapterDeps: OnboardingAdapterDeps = {
+    required,
     checkCameraPermission: deps.checkCameraPermission,
     checkGeolocationPermission: deps.checkGeolocationPermission,
     requestCameraPermission: deps.requestCameraPermission,

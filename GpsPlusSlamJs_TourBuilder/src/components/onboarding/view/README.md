@@ -10,7 +10,9 @@ checkExistingPermissions(deps: OnboardingAdapterDeps): Promise<void>  // non-pro
 requestPermissions(deps: OnboardingAdapterDeps): Promise<void>        // prompting, on Grant Access
 ```
 
-`OnboardingAdapterDeps` injects the four framework calls
+`OnboardingAdapterDeps` takes an optional `required` kind list (default camera +
+GPS); when `camera` is not required the camera calls are skipped and may be
+omitted. It injects the four framework calls
 (`checkCameraPermission`, `checkGeolocationPermission`,
 `requestCameraPermission`, `requestGeolocationPermission`, from
 `gps-plus-slam-app-framework/sensors`) plus `dispatch`. `requestPermissions`
@@ -35,7 +37,8 @@ checklist look; `app.css` pulls it in via `@import`.
 mountOnboardingGate(root: HTMLElement, deps: OnboardingGateDeps): { destroy(): void }
 ```
 
-Renders two checklist rows (camera, GPS), a Grant Access button, and a Start
+Renders a checklist row per required kind (camera + GPS by default; GPS only
+when `deps.required` is `['gps']`), a Grant Access button, and a Start
 button, all driven by an internal `gateReducer` instance — the view holds no
 permission logic of its own. On mount, calls the non-prompting
 `checkExistingPermissions` so a returning visitor who already granted both in

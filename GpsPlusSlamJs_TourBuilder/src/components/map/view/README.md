@@ -11,6 +11,10 @@ createTourMap(container: HTMLElement | null, options?: TourMapOptions): TourMapI
 // options: { tileServerUrl?, onTileError? }
 ```
 
+`applyMapVisibility(map, visible)` — show + `resize()` or hide a map (no-op for
+`null`). The HUD Map toggle in both the composed app and the desktop-preview
+demo goes through it.
+
 `TourMapInstance`:
 
 - **`setGpsPosition(lat, lon)`** — centers the map. Same name/shape as

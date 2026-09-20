@@ -64,8 +64,10 @@ taps on touch. The tap decision itself is `tap-gate.ts`. Each component's own
 
 ### `hud.ts` / `hud.css` — the in-session HUD (view)
 
-`mountHud(container, options)`: the map/autopilot/OSM-buildings/end-tour
-control bar, status line, and one-shot notice channel. Used by the composed
+`mountHud(container, options)`: a row of five round icon buttons
+(Buildings, Auto-walk, Wayfinding, Map, End tour — same DOM and CSS on phone
+and desktop; 48px under `pointer: coarse`, 40px otherwise), the status line,
+and the one-shot notice channel. Used by the composed
 viewing app (`src/app/viewing/viewing-app.ts`) for the real AR/preview
 sessions, and by the desktop-preview demo (component 11) for its own preview
 session — the one exception to "no `demo.ts`/`index.html` here" is that this
@@ -76,7 +78,54 @@ rather than `src/app/viewing/` because a component may not import from
 `src/app/` (dependency-cruiser's `components-and-store-not-to-app` rule).
 `hud.css` uses `var(--token, fallback)` throughout so it renders identically
 whether or not the composed app's design tokens (`app.css`'s `:root`) are
-loaded.
+loaded. It is the single source of HUD styling (bar, hint bubbles, End-tour
+dialog) and is linked by both `app/index.html` and the desktop-preview page,
+next to `icon-button.css`.
+
+- **State setters, not text.** `setMapActive`, `setAutopilotActive`,
+  `setWayfindingActive`, `setOsmBuildingsStatus(HudBuildingsStatus)`. The HUD
+  owns the wording (`hud-state.ts`); callers push state, never labels.
+- **Toggle contract.** Three cues for "on": accent fill, badge dot,
+  `aria-pressed`. `aria-label` and `title` are identical and name the action
+  the tap performs (`Show map` / `Hide map`, `Auto-walk` / `Stop auto-walk`,
+  `Wayfinding` / `Stop wayfinding`).
+- **Buildings has four states.** `off` → `Show buildings`; `idle`/`loading` →
+  busy ring, `Loading buildings…` (still clickable); `loaded` → pressed,
+  `Hide buildings`; `failed` → error ring, `Buildings failed — tap to retry`.
+  Entering `failed` also raises a notice; leaving it clears the notice only
+  while it still shows that text.
+- **Hints show one at a time.** Auto-walk's hint shows on mount; Wayfinding's
+  waits until it is closed, times out (8s) or the button is used. With no
+  Auto-walk button, Wayfinding's shows on mount. Both are one-time.
+- **End tour asks first.** The button opens a `confirm-dialog`; only "End"
+  calls `onEndTour`.
+
+### `icon-button.ts` / `icon-button.css` — round icon button (view)
+
+`createIconButton({ icon, label, pressed?, variant? })` → `{ element,
+setLabel, setPressed, setBusy, setError }`. `pressed` defined makes it a
+toggle (`aria-pressed`); `setPressed` is a no-op otherwise. `setBusy` adds a
+spinning ring + `aria-busy` without disabling the button. `variant: "danger"`
+is a permanent red tint. Classes: `icon-btn`, `icon-btn--danger|busy|error`.
+
+### `hud-state.ts` — HUD wording (pure)
+
+`mapLabel`/`autopilotLabel`/`wayfindingLabel(active)` and
+`buildingsAppearance(status)` → `{ pressed, busy, error, label }`.
+`HudBuildingsStatus` is structurally the desktop-preview's
+`OsmBuildingStatus`, redeclared so the HUD does not import a sibling component.
+
+### `hud-icons.ts` — HUD glyphs
+
+`HUD_ICONS`: the five 24px `currentColor` stroke SVGs.
+
+### `confirm-dialog.ts` — HUD confirm (view)
+
+`createConfirmDialog({ testid, title, confirmLabel, cancelLabel, onConfirm })`
+→ `{ element, open(returnFocusTo?), close(), destroy() }`. A real `<dialog>`
+opened by setting `open`, **not** `showModal()` (WebXR DOM overlay only
+renders the overlay subtree). Escape, backdrop tap and the Tab focus trap are
+implemented here; Cancel takes focus on open.
 
 ### `demo.css` — shared canvas-demo styles
 
@@ -106,5 +155,6 @@ panel). `pointer-tap-picker.test.ts` covers the stateful picking headlessly —
 synthetic pointer events against a fake element, real `Raycaster`/meshes —
 pinning the multi-touch/cancel invalidation, the tap-vs-drag/long-press gate
 wiring, the client→NDC mapping, and nearest-hit selection. `hud.test.ts`
-(jsdom) covers `mountHud`'s DOM wiring: conditional buttons, label/notice
-updates, the autopilot hint lifecycle, `destroy()`. Run `pnpm test:unit`.
+(jsdom) covers `mountHud`'s DOM wiring: conditional buttons, state setters,
+hint sequencing, the End-tour confirm, `destroy()`. `icon-button.test.ts`,
+`hud-state.test.ts` and `confirm-dialog.test.ts` cover the helpers. Run `pnpm test:unit`.

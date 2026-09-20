@@ -8,11 +8,23 @@
  * blocked, map tiles unavailable).
  *
  * Knows nothing about the store or the scene — the caller (`viewing-app.ts`,
- * or the desktop-preview demo) pushes text in and reacts to the callbacks.
+ * or the desktop-preview demo) pushes state in (`setMapActive`, …; the HUD
+ * owns the wording) and reacts to the callbacks.
  * Shared under `components/` rather than `app/viewing/` because the
  * standalone desktop-preview demo (component 11) mounts the same HUD, and a
  * component may not import from `src/app/` (dependency-cruiser).
  */
+
+import { createConfirmDialog } from "./confirm-dialog.js";
+import { HUD_ICONS } from "./hud-icons.js";
+import {
+  autopilotLabel,
+  buildingsAppearance,
+  mapLabel,
+  wayfindingLabel,
+  type HudBuildingsStatus,
+} from "./hud-state.js";
+import { createIconButton } from "./icon-button.js";
 
 /** How long a callout hint stays up before it dismisses itself. */
 const AUTOPILOT_HINT_TIMEOUT_MS = 8000;
@@ -22,6 +34,10 @@ const WAYFINDING_HINT_TIMEOUT_MS = 8000;
  *  button and needs to visually point down at it. */
 const DOWN_ARROW_SVG =
   '<svg width="14" height="14" viewBox="0 0 12 12"><path d="M2 4 L6 9 L10 4" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+/** The hint's close glyph as SVG: a text "×" sits off-centre in its line box. */
+const CLOSE_X_SVG =
+  '<svg width="8" height="8" viewBox="0 0 8 8" aria-hidden="true"><path d="M1 1 L7 7 M7 1 L1 7" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>';
 
 export interface HudOptions {
   /** No map toggle button unless a handler is given (e.g. the desktop-preview demo has no map). */
@@ -43,19 +59,47 @@ export interface Hud {
   /** One-shot notice: audio blocked, tiles offline, a failed asset. */
   showNotice(message: string): void;
   /** No-op unless the HUD was mounted with a map toggle. */
-  setMapToggleLabel(label: string): void;
+  setMapActive(active: boolean): void;
   /** No-op unless the HUD was mounted with an autopilot toggle. */
-  setAutopilotLabel(label: string): void;
+  setAutopilotActive(active: boolean): void;
+  setWayfindingActive(active: boolean): void;
   /** No-op unless the HUD was mounted with an OSM buildings toggle. */
-  setOsmBuildingsLabel(label: string): void;
+  setOsmBuildingsStatus(status: HudBuildingsStatus): void;
   /** Hides the one-time "try Auto-walk" callout, if it's still showing.
    *  No-op once already dismissed or when there's no autopilot toggle. */
   dismissAutopilotHint(): void;
-  setWayfindingLabel(label: string): void;
   /** Hides the one-time "try Wayfinding" callout, if it's still showing. */
   dismissWayfindingHint(): void;
   destroy(): void;
 }
+
+interface ToggleFlags {
+  readonly busy?: boolean;
+  readonly error?: boolean;
+}
+
+/** A HUD toggle whose wording and look the HUD derives from state. */
+interface Toggle {
+  readonly element: HTMLButtonElement;
+  set(label: string, pressed: boolean, flags?: ToggleFlags): void;
+}
+
+function iconToggle(testid: string, icon: string, label: string): Toggle {
+  const button = createIconButton({ icon, label, pressed: false });
+  button.element.dataset.testid = testid;
+  return {
+    element: button.element,
+    set(next, pressed, flags = {}) {
+      button.setLabel(next);
+      button.setPressed(pressed);
+      button.setBusy(flags.busy === true);
+      button.setError(flags.error === true);
+    },
+  };
+}
+
+const BUILDINGS_FAILED_NOTICE =
+  "Buildings couldn't load. Tap the buildings button to retry.";
 
 export function mountHud(container: HTMLElement, options: HudOptions): Hud {
   const element = document.createElement("div");
@@ -72,51 +116,78 @@ export function mountHud(container: HTMLElement, options: HudOptions): Hud {
   notice.dataset.testid = "viewing-hud-notice";
   notice.hidden = true;
 
+  let lastBuildingsStatus: HudBuildingsStatus = "off";
+
   const controls = document.createElement("div");
   controls.className = "ar-hud-controls";
 
-  const mapToggle = document.createElement("button");
-  mapToggle.textContent = "Map";
-  mapToggle.dataset.testid = "viewing-map-toggle";
+  const mapToggle = iconToggle(
+    "viewing-map-toggle",
+    HUD_ICONS.map,
+    mapLabel(false),
+  );
   if (options.onToggleMap) {
-    mapToggle.addEventListener("click", () => options.onToggleMap?.());
+    mapToggle.element.addEventListener("click", () => options.onToggleMap?.());
   }
 
-  const endTour = document.createElement("button");
-  endTour.textContent = "End tour";
+  const endTour = createIconButton({
+    icon: HUD_ICONS.exit,
+    label: "End tour",
+    variant: "danger",
+  }).element;
   endTour.dataset.testid = "viewing-end-tour";
-  if (options.onEndTour) {
-    endTour.addEventListener("click", () => options.onEndTour?.());
-  }
+  const endDialog = options.onEndTour
+    ? createConfirmDialog({
+        testid: "viewing-end-tour",
+        title: "End tour?",
+        confirmLabel: "End",
+        cancelLabel: "Cancel",
+        onConfirm: () => options.onEndTour?.(),
+      })
+    : undefined;
+  endTour.addEventListener("click", () => endDialog?.open(endTour));
 
-  const autopilot = document.createElement("button");
-  autopilot.textContent = "Auto-walk";
-  autopilot.dataset.testid = "viewing-autopilot";
+  const autopilot = iconToggle(
+    "viewing-autopilot",
+    HUD_ICONS.walk,
+    autopilotLabel(false),
+  );
 
-  const wayfinding = document.createElement("button");
-  wayfinding.textContent = "Wayfinding";
-  wayfinding.dataset.testid = "viewing-wayfinding";
-  wayfinding.addEventListener("click", () => options.onToggleWayfinding());
+  const wayfinding = iconToggle(
+    "viewing-wayfinding",
+    HUD_ICONS.wayfinding,
+    wayfindingLabel(false),
+  );
+  wayfinding.element.addEventListener("click", () =>
+    options.onToggleWayfinding(),
+  );
 
   /**
    * A one-time callout above a toggle button rather than turning the
    * feature on by itself: the visitor stays in control from the first
-   * frame, but still finds out the feature exists instead of only via the
-   * status line's prose. Shared by autopilot and the wayfinding guide —
-   * same bubble, same dismiss/close/auto-timeout behavior, different text.
+   * frame, but still finds out the feature exists. Starts hidden ("queued");
+   * `show()` reveals it and starts its own timeout, `dismiss()` ends it for
+   * good (a dismissed-while-queued hint never appears) and fires `onGone`
+   * so a hint waiting behind this one can take its turn.
    */
   function mountHintedToggle(
     button: HTMLButtonElement,
     hintTestid: string,
     hintText: string,
     timeoutMs: number,
-  ): { readonly wrap: HTMLDivElement; dismiss: () => void } {
+    onGone?: () => void,
+  ): {
+    readonly wrap: HTMLDivElement;
+    readonly show: () => void;
+    readonly dismiss: () => void;
+  } {
     const wrap = document.createElement("div");
     wrap.className = "hud-hint-wrap";
 
     const hint = document.createElement("div");
     hint.className = "hud-hint";
     hint.dataset.testid = hintTestid;
+    hint.hidden = true;
 
     const hintTextEl = document.createElement("span");
     hintTextEl.textContent = hintText;
@@ -124,65 +195,81 @@ export function mountHud(container: HTMLElement, options: HudOptions): Hud {
     hintClose.type = "button";
     hintClose.className = "hud-hint-close";
     hintClose.setAttribute("aria-label", "Dismiss");
-    hintClose.textContent = "×";
+    hintClose.innerHTML = CLOSE_X_SVG;
     const hintArrow = document.createElement("span");
     hintArrow.className = "hud-hint-arrow";
     hintArrow.innerHTML = DOWN_ARROW_SVG;
 
     hint.append(hintTextEl, hintClose, hintArrow);
 
+    let phase: "queued" | "shown" | "gone" = "queued";
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
     const dismiss = (): void => {
-      if (hint.hidden) return;
+      if (phase === "gone") return;
+      phase = "gone";
       hint.hidden = true;
       clearTimeout(timer);
+      onGone?.();
+    };
+    const show = (): void => {
+      if (phase !== "queued") return;
+      phase = "shown";
+      hint.hidden = false;
+      timer = setTimeout(dismiss, timeoutMs);
     };
     hintClose.addEventListener("click", dismiss);
-    const timer = setTimeout(dismiss, timeoutMs);
 
     wrap.append(hint, button);
-    return { wrap, dismiss };
+    return { wrap, show, dismiss };
   }
 
-  const osmBuildingsToggle = document.createElement("button");
-  osmBuildingsToggle.textContent = "Buildings";
-  osmBuildingsToggle.dataset.testid = "viewing-osm-buildings-toggle";
+  const osmBuildingsToggle = iconToggle(
+    "viewing-osm-buildings-toggle",
+    HUD_ICONS.buildings,
+    buildingsAppearance("off").label,
+  );
+
+  // Wayfinding's hint is created first so Auto-walk's can release it.
+  const wayfindingHint = mountHintedToggle(
+    wayfinding.element,
+    "viewing-wayfinding-hint",
+    "Try Wayfinding to find your way",
+    WAYFINDING_HINT_TIMEOUT_MS,
+  );
+  const autopilotHint = options.onToggleAutopilot
+    ? mountHintedToggle(
+        autopilot.element,
+        "viewing-autopilot-hint",
+        "Try Auto-walk to move hands-free",
+        AUTOPILOT_HINT_TIMEOUT_MS,
+        wayfindingHint.show,
+      )
+    : undefined;
+
   if (options.onToggleOsmBuildings) {
-    osmBuildingsToggle.addEventListener("click", () =>
+    osmBuildingsToggle.element.addEventListener("click", () =>
       options.onToggleOsmBuildings?.(),
     );
-    controls.appendChild(osmBuildingsToggle);
+    controls.appendChild(osmBuildingsToggle.element);
   }
-
-  let hideAutopilotHint: (() => void) | undefined;
-  if (options.onToggleAutopilot) {
-    const { wrap, dismiss } = mountHintedToggle(
-      autopilot,
-      "viewing-autopilot-hint",
-      "Try Auto-walk to move hands-free",
-      AUTOPILOT_HINT_TIMEOUT_MS,
+  if (autopilotHint) {
+    autopilot.element.addEventListener("click", () =>
+      options.onToggleAutopilot?.(),
     );
-    hideAutopilotHint = dismiss;
-    autopilot.addEventListener("click", () => options.onToggleAutopilot?.());
-    controls.appendChild(wrap);
+    controls.appendChild(autopilotHint.wrap);
   }
-
-  // Map + End tour sit between the two hinted toggles on purpose: both
-  // hint bubbles are much wider than their own button and both show on
-  // mount, so placing Auto-walk and Wayfinding directly adjacent makes
-  // the two callouts overlap.
-  if (options.onToggleMap) controls.appendChild(mapToggle);
+  controls.appendChild(wayfindingHint.wrap);
+  if (options.onToggleMap) controls.appendChild(mapToggle.element);
   if (options.onEndTour) controls.appendChild(endTour);
 
-  const { wrap: wayfindingWrap, dismiss: hideWayfindingHint } =
-    mountHintedToggle(
-      wayfinding,
-      "viewing-wayfinding-hint",
-      "Try Wayfinding to find your way",
-      WAYFINDING_HINT_TIMEOUT_MS,
-    );
-  controls.appendChild(wayfindingWrap);
+  // Only one bubble is on screen at a time, so bubble width no longer
+  // constrains control order. Auto-walk goes first; with no Auto-walk button
+  // (the phone AR session) Wayfinding has nothing to queue behind.
+  (autopilotHint ?? wayfindingHint).show();
 
   element.append(status, notice, controls);
+  if (endDialog) element.append(endDialog.element);
   container.appendChild(element);
 
   return {
@@ -194,29 +281,46 @@ export function mountHud(container: HTMLElement, options: HudOptions): Hud {
       notice.textContent = message;
       notice.hidden = false;
     },
-    setMapToggleLabel(label) {
+    setMapActive(active) {
       if (!options.onToggleMap) return;
-      mapToggle.textContent = label;
+      mapToggle.set(mapLabel(active), active);
     },
-    setAutopilotLabel(label) {
-      autopilot.textContent = label;
+    setAutopilotActive(active) {
+      autopilot.set(autopilotLabel(active), active);
     },
-    setOsmBuildingsLabel(label) {
+    setWayfindingActive(active) {
+      wayfinding.set(wayfindingLabel(active), active);
+    },
+    setOsmBuildingsStatus(buildingStatus) {
       if (!options.onToggleOsmBuildings) return;
-      osmBuildingsToggle.textContent = label;
+      const { label, pressed, busy, error } =
+        buildingsAppearance(buildingStatus);
+      osmBuildingsToggle.set(label, pressed, { busy, error });
+      // The red ring alone is not readable at a glance outdoors, so the
+      // transition INTO failed also raises a notice. Leaving failed clears it,
+      // but only while it still shows this text (never someone else's notice).
+      if (buildingStatus === "failed" && lastBuildingsStatus !== "failed") {
+        notice.textContent = BUILDINGS_FAILED_NOTICE;
+        notice.hidden = false;
+      } else if (
+        buildingStatus !== "failed" &&
+        notice.textContent === BUILDINGS_FAILED_NOTICE
+      ) {
+        notice.hidden = true;
+      }
+      lastBuildingsStatus = buildingStatus;
     },
     dismissAutopilotHint() {
-      hideAutopilotHint?.();
-    },
-    setWayfindingLabel(label) {
-      wayfinding.textContent = label;
+      autopilotHint?.dismiss();
     },
     dismissWayfindingHint() {
-      hideWayfindingHint();
+      wayfindingHint.dismiss();
     },
     destroy() {
-      hideAutopilotHint?.();
-      hideWayfindingHint();
+      // Wayfinding first: dismissing Auto-walk would otherwise release it.
+      wayfindingHint.dismiss();
+      autopilotHint?.dismiss();
+      endDialog?.destroy();
       element.remove();
     },
   };

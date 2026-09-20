@@ -1,7 +1,8 @@
 /*
- * Styling for `hud.ts`'s `.ar-hud` (component 8's/app's in-session HUD).
- * Shared under components/ so the desktop-preview demo can link it too — see
- * hud.ts's header comment.
+ * Single source of styling for `hud.ts` (bar, hint bubbles). Linked by both
+ * the composed app (app/index.html) and the desktop-preview page. The round
+ * buttons themselves are styled by `icon-button.css`. Shared under
+ * components/ — see hud.ts's header comment.
  *
  * Every color/spacing/timing token is `var(--token, fallback)`: the composed
  * app defines the real tokens in app.css's `:root`, so it renders unchanged;
@@ -47,48 +48,25 @@
 
 .ar-hud-controls {
   display: flex;
+  align-items: flex-end;
   gap: var(--space-2, 8px);
   justify-content: flex-end;
 }
 
-/* Direct children only (not `button` alone) — the hint's own `×` close
-   button is a `<button>` nested two levels deeper, inside `.autopilot-hint`,
-   and must not pick up this control-bar box styling. */
-.ar-hud-controls > button,
-.ar-hud-controls > .autopilot-wrap > button {
-  font: inherit;
-  font-size: 13px;
-  min-height: 44px;
-  padding: var(--space-3, 12px) var(--space-4, 16px);
-  background: #1b2338;
-  border: 1px solid var(--border, #2a3550);
-  border-radius: var(--radius-sm, 6px);
-  color: var(--text, #e9eef7);
-  cursor: pointer;
-  transition:
-    background var(--duration-base, 200ms)
-      var(--ease-out, cubic-bezier(0.23, 1, 0.32, 1)),
-    border-color var(--duration-base, 200ms)
-      var(--ease-out, cubic-bezier(0.23, 1, 0.32, 1));
-}
-
-.ar-hud-controls > button:hover:not(:disabled),
-.ar-hud-controls > .autopilot-wrap > button:hover:not(:disabled) {
-  background: var(--surface-hover, rgb(255 255 255 / 6%));
-  border-color: var(--border-strong, #3d5488);
-}
-
-/* Auto-walk's one-time callout (hud.ts) — points down at the button it
-   introduces rather than turning the feature on unasked. */
-.autopilot-wrap {
+/* A toggle button's one-time callout (hud.ts) — points down at the button
+   it introduces rather than turning the feature on unasked. Shared by
+   Auto-walk and the wayfinding guide toggle: same bubble, different text. */
+.hud-hint-wrap {
   position: relative;
 }
 
-.autopilot-hint {
+.hud-hint {
   position: absolute;
   bottom: calc(100% + 10px);
-  left: 50%;
-  transform: translateX(-50%);
+  /* Right-anchored, not centred: the buttons sit at the right edge, so a
+     centred 220px bubble would hang off-screen. The arrow is offset to
+     stay over the button instead. */
+  right: 0;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -99,9 +77,14 @@
   color: white;
   font-size: 12px;
   font-weight: 500;
-  white-space: nowrap;
+  /* Wraps rather than a fixed nowrap line — a phone-width viewport can be
+     narrower than the hint text itself. `max-content` is required: an
+     absolute box otherwise shrink-to-fits the ~40px button-wide wrap and
+     breaks the text one word per line; max-width then caps it. */
+  width: max-content;
+  max-width: min(220px, calc(100vw - 24px));
   box-shadow: 0 4px 12px rgb(0 0 0 / 40%);
-  animation: autopilot-hint-in var(--duration-base, 200ms)
+  animation: hud-hint-in var(--duration-base, 200ms)
     var(--ease-out, cubic-bezier(0.23, 1, 0.32, 1)) both;
 }
 
@@ -109,9 +92,9 @@
    display: none }` (same specificity, author rule loads later) — the
    exact bug already hit once this session on `.landing-link-form` and
    `.authoring-sections`. Without this, `hint.hidden = true` (the close
-   button, dismissAutopilotHint(), and the auto-timeout all just set this)
-   updates the DOM attribute but the bubble stays visually on screen. */
-.autopilot-hint[hidden] {
+   button, dismiss*Hint(), and the auto-timeout all just set this) updates
+   the DOM attribute but the bubble stays visually on screen. */
+.hud-hint[hidden] {
   display: none;
 }
 
@@ -120,10 +103,11 @@
    map markers (see their own comments: a bare icon-sized hitbox is
    precise to the point of unusable, worse on touch), without changing
    the bubble's footprint the way actually growing the button would. */
-.autopilot-hint-close {
+.hud-hint-close {
   position: relative;
   display: grid;
   place-items: center;
+  flex-shrink: 0;
   width: 16px;
   height: 16px;
   min-height: 0;
@@ -132,36 +116,109 @@
   background: rgb(255 255 255 / 20%);
   border-radius: 50%;
   color: white;
-  font-size: 12px;
-  line-height: 1;
 }
 
-.autopilot-hint-close::before {
+.hud-hint-close::before {
   content: "";
   position: absolute;
   inset: -8px;
 }
 
-.autopilot-hint-close:hover {
+.hud-hint-close:hover:not(:disabled) {
   background: rgb(255 255 255 / 32%);
 }
 
-.autopilot-hint-arrow {
+.hud-hint-arrow {
   position: absolute;
   top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
+  right: 12px; /* centre (19px) ≈ the 40px button's centre */
   color: var(--primary, #3d5488);
   line-height: 0;
 }
 
-@keyframes autopilot-hint-in {
+@media (pointer: coarse) {
+  .hud-hint-arrow {
+    right: 17px; /* 48px coarse-pointer button */
+  }
+}
+
+@keyframes hud-hint-in {
   from {
     opacity: 0;
-    transform: translate(-50%, 6px);
+    transform: translateY(6px);
   }
   to {
     opacity: 1;
-    transform: translate(-50%, 0);
+    transform: translateY(0);
   }
+}
+
+/* End-tour confirm (confirm-dialog.ts). Non-modal <dialog> inside the HUD
+   tree (WebXR DOM overlay), so the backdrop is our own element. */
+.hud-confirm {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4, 16px);
+}
+
+.hud-confirm[hidden] {
+  display: none;
+}
+
+.hud-confirm-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgb(0 0 0 / 55%);
+}
+
+/* Undo the UA's absolutely-centred <dialog> box; the grid centres it. */
+.hud-confirm-dialog {
+  position: relative;
+  inset: auto;
+  margin: 0;
+  width: min(320px, 100%);
+  box-sizing: border-box;
+  padding: var(--space-4, 16px);
+  background: #151b2b;
+  color: var(--text, #e9eef7);
+  border: 1px solid var(--border, #2a3550);
+  border-radius: var(--radius-md, 10px);
+}
+
+.hud-confirm-title {
+  margin: 0 0 var(--space-4, 16px);
+  font-size: 16px;
+}
+
+.hud-confirm-actions {
+  display: flex;
+  gap: var(--space-2, 8px);
+  justify-content: flex-end;
+}
+
+/* Skin the two buttons here too: the desktop-preview page does not load
+   app.css's generic `button` rule. */
+.hud-confirm-actions button {
+  font: inherit;
+  font-size: 14px;
+  min-height: 44px;
+  padding: var(--space-2, 8px) var(--space-4, 16px);
+  background: #1b2338;
+  border: 1px solid var(--border, #2a3550);
+  border-radius: var(--radius-sm, 6px);
+  color: var(--text, #e9eef7);
+  cursor: pointer;
+}
+
+.hud-confirm-actions .hud-confirm-confirm {
+  background: #7f1d1d;
+  border-color: var(--error, #f87171);
+}
+
+.hud-confirm-actions button:focus-visible {
+  outline: 2px solid var(--accent, #9ec1ff);
+  outline-offset: 2px;
 }

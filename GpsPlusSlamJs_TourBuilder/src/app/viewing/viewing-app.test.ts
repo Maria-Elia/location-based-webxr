@@ -264,6 +264,12 @@ function controllableLocate() {
   };
 }
 
+/** End tour now asks for confirmation: click the button, then confirm. */
+function endTour(root: HTMLElement): void {
+  (query(root, "viewing-end-tour") as HTMLButtonElement).click();
+  (query(root, "viewing-end-tour-confirm") as HTMLButtonElement).click();
+}
+
 function query(root: HTMLElement, testId: string): HTMLElement | null {
   return root.querySelector<HTMLElement>(`[data-testid="${testId}"]`);
 }
@@ -584,7 +590,7 @@ describe("Viewing mode screen flow", () => {
     expect(preview.domElement.parentElement).not.toBeNull();
 
     // Ending the preview tears the session down and returns to the entry.
-    (query(root, "viewing-end-tour") as HTMLButtonElement).click();
+    endTour(root);
     await vi.waitFor(() => {
       expect(query(root, "viewing-entry")).not.toBeNull();
     });
@@ -658,6 +664,41 @@ describe("Viewing mode screen flow", () => {
     expect(map.setGpsPosition).toHaveBeenCalledWith(48.5, 11.5);
   });
 
+  it("the Map button reflects the map's open/closed state", async () => {
+    const { controller } = fakeController({ status: "unsupported" });
+    const preview = fakePreviewSession();
+    const createPreviewSession = vi.fn(() => preview);
+
+    mountViewingApp(root, "https://host.example/tour.zip", {
+      ...testDeps({
+        createPreviewSession:
+          createPreviewSession as unknown as ViewingAppDeps["createPreviewSession"],
+      }),
+      createController: () => controller as never,
+    });
+
+    await vi.waitFor(() => {
+      expect(query(root, "grant-access")).not.toBeNull();
+    });
+    await completeOnboarding(root);
+    query(root, "viewing-enter-preview")!.click();
+    await vi.waitFor(() => {
+      expect(query(root, "viewing-map-toggle")).not.toBeNull();
+    });
+
+    const mapButton = query(root, "viewing-map-toggle") as HTMLButtonElement;
+    // The session shell opens the map, so the button starts pressed.
+    expect(mapButton.getAttribute("aria-pressed")).toBe("true");
+    expect(mapButton.getAttribute("aria-label")).toBe("Hide map");
+
+    mapButton.click();
+    expect(mapButton.getAttribute("aria-pressed")).toBe("false");
+    expect(mapButton.getAttribute("aria-label")).toBe("Show map");
+
+    mapButton.click();
+    expect(mapButton.getAttribute("aria-pressed")).toBe("true");
+  });
+
   it("shows the OSM buildings toggle in the preview HUD, labelled from the layer's initial status", async () => {
     const { controller } = fakeController({ status: "unsupported" });
     const preview = fakePreviewSession({ osmBuildingsStatus: "loading" });
@@ -682,12 +723,12 @@ describe("Viewing mode screen flow", () => {
     });
     // Applied from getOsmBuildingsStatus() immediately, without waiting for
     // an onOsmBuildingsStatusChange event.
-    expect(query(root, "viewing-osm-buildings-toggle")!.textContent).toBe(
-      "Buildings: Loading…",
-    );
+    expect(
+      query(root, "viewing-osm-buildings-toggle")!.getAttribute("aria-label"),
+    ).toBe("Loading buildings…");
   });
 
-  it("updates the buildings label as the layer's status changes, with no notice on failure", async () => {
+  it("updates the buildings label as the layer's status changes, and raises a notice on failure", async () => {
     const { controller } = fakeController({ status: "unsupported" });
     const preview = fakePreviewSession({ osmBuildingsStatus: "loading" });
     const createPreviewSession = vi.fn(() => preview);
@@ -710,16 +751,16 @@ describe("Viewing mode screen flow", () => {
     });
 
     preview._emitOsmStatus("loaded");
-    expect(query(root, "viewing-osm-buildings-toggle")!.textContent).toBe(
-      "Buildings: On",
-    );
+    expect(
+      query(root, "viewing-osm-buildings-toggle")!.getAttribute("aria-label"),
+    ).toBe("Hide buildings");
     expect(query(root, "viewing-hud-notice")!.hidden).toBe(true);
 
     preview._emitOsmStatus("failed");
-    expect(query(root, "viewing-osm-buildings-toggle")!.textContent).toBe(
-      "Buildings: Failed (tap to retry)",
-    );
-    expect(query(root, "viewing-hud-notice")!.hidden).toBe(true);
+    expect(
+      query(root, "viewing-osm-buildings-toggle")!.getAttribute("aria-label"),
+    ).toBe("Buildings failed — tap to retry");
+    expect(query(root, "viewing-hud-notice")!.hidden).toBe(false);
   });
 
   it("derives the toggle click's target enabled value from the current status", async () => {
@@ -801,7 +842,7 @@ describe("Viewing mode screen flow", () => {
       expect(query(root, "viewing-hud")).not.toBeNull();
     });
 
-    (query(root, "viewing-end-tour") as HTMLButtonElement).click();
+    endTour(root);
     await vi.waitFor(() => {
       expect(query(root, "viewing-entry")).not.toBeNull();
     });
@@ -992,7 +1033,7 @@ describe("Start-distance gate on the entry screen", () => {
       expect(query(root, "viewing-end-tour")).not.toBeNull();
     });
 
-    (query(root, "viewing-end-tour") as HTMLButtonElement).click();
+    endTour(root);
 
     await vi.waitFor(() => {
       expect(locate.calls).toHaveBeenCalledTimes(2);

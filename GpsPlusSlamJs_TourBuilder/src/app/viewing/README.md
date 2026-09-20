@@ -31,7 +31,10 @@ Plan: [`plans/2026-08-14-viewing-composition-plan.md`](../../../plans/2026-08-14
 The in-session HUD (`mountHud`) lives in
 [`src/components/shared/hud.ts`](../../components/shared/hud.ts), not here —
 the desktop-preview demo (component 11) mounts the identical HUD, and a
-component may not import from `src/app/`.
+component may not import from `src/app/`. The app pushes _state_ into the HUD
+(`setMapVisible` keeps `mapVisible` and the Map button in sync;
+`setOsmBuildingsStatus` replaces the old label helper), and End tour now needs
+a confirm click.
 
 Where a device cannot run AR (any desktop), the entry screen offers the
 desktop preview instead of a dead end: `viewing-app.ts` swaps component 11's
@@ -105,17 +108,18 @@ call for the same reason.
 
 ## Failure states, by design
 
-| Situation                                | What the visitor sees                                                |
-| ---------------------------------------- | -------------------------------------------------------------------- |
-| No `?tour=`                              | "No tour link" — scan the QR / open the shared link. No retry.       |
-| CORS-blocked, 404, or a share _page_ URL | Named cause + what to fix, with a retry that re-opens the tour.      |
-| Corrupt zip / invalid `tour.json`        | "This tour file is damaged" — **no** retry; retrying cannot fix it.  |
-| No WebXR on this device                  | Enter AR disabled, **desktop preview offered**, map still usable.    |
-| Permission denied / `initAR` failure     | Inline reason on the entry screen, still retryable.                  |
-| Alignment not converged yet              | The framework's own coaching ("walk a few metres"), no empty camera. |
-| Session ended by the system back gesture | Back to the entry screen with tour, progress and warm cache intact.  |
-| Story audio blocked                      | HUD notice asking for one tap.                                       |
-| Map tiles unreachable (offline)          | One-shot notice; stops, position and statuses keep working.          |
+| Situation                                | What the visitor sees                                                     |
+| ---------------------------------------- | ------------------------------------------------------------------------- |
+| No `?tour=`                              | "No tour link" — scan the QR / open the shared link. No retry.            |
+| CORS-blocked, 404, or a share _page_ URL | Named cause + what to fix, with a retry that re-opens the tour.           |
+| Corrupt zip / invalid `tour.json`        | "This tour file is damaged" — **no** retry; retrying cannot fix it.       |
+| No WebXR on this device                  | Enter AR disabled, **desktop preview offered**, map still usable.         |
+| Permission denied / `initAR` failure     | Inline reason on the entry screen, still retryable.                       |
+| Alignment not converged yet              | The framework's own coaching ("walk a few metres"), no empty camera.      |
+| Session ended by the system back gesture | Back to the entry screen with tour, progress and warm cache intact.       |
+| Story audio blocked                      | HUD notice asking for one tap.                                            |
+| Buildings failed to load                 | HUD notice: "Buildings couldn't load. Tap the buildings button to retry." |
+| Map tiles unreachable (offline)          | One-shot notice; stops, position and statuses keep working.               |
 
 ## Tests
 
