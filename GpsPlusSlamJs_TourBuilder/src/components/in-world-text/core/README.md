@@ -43,6 +43,12 @@ fixed-aspect box; `maxLinesPerPage` and the wrap width are **derived** from the
 text rect and line height, so the visuals and the hit regions (which share the
 layout) always line up — overflow is paginated, never clipped.
 
+Height: default is fixed 4:3 for the width. `maxHeightMeters` (+ a `lineCount`)
+lets the panel grow to fit its text up to that cap; `minHeightMeters` is a floor
+that applies even to short text (e.g. to match an adjacent visual's height) —
+the extra height goes to the text rect, not the footer chrome. If the minimum
+exceeds `maxHeightMeters`, the maximum wins.
+
 ### `describe-panel.ts` — shared draw model
 
 `describePanel(page, style, nav)` → `PanelDrawModel`: the one "what to draw where"

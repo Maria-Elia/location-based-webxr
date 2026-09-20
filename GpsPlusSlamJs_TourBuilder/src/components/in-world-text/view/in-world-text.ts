@@ -71,6 +71,8 @@ export interface InWorldTextOptions {
   readonly maxWidthMeters?: number;
   /** Cap, in metres, on how tall the panel may grow to fit its text. */
   readonly maxHeightMeters?: number;
+  /** Floor, in metres, on the panel height (e.g. the adjacent visual's). */
+  readonly minHeightMeters?: number;
   readonly style?: Partial<TextStyle>;
   /** 'canvas' forces the fallback; 'auto'/'html' try HTML with the runtime net. */
   readonly backend?: "auto" | "html" | "canvas";
@@ -242,9 +244,13 @@ function resolveStyleInput(options: InWorldTextOptions): TextStyle {
     options.maxWidthMeters !== undefined
       ? { ...merged, maxWidthMeters: options.maxWidthMeters }
       : merged;
-  return options.maxHeightMeters !== undefined
-    ? { ...withWidth, maxHeightMeters: options.maxHeightMeters }
-    : withWidth;
+  const withMax: TextStyle =
+    options.maxHeightMeters !== undefined
+      ? { ...withWidth, maxHeightMeters: options.maxHeightMeters }
+      : withWidth;
+  return options.minHeightMeters !== undefined
+    ? { ...withMax, minHeightMeters: options.minHeightMeters }
+    : withMax;
 }
 
 /**

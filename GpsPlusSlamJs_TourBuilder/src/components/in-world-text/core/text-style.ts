@@ -28,6 +28,12 @@ export interface TextStyle {
    * aspect, unconditionally.
    */
   readonly maxHeightMeters?: number;
+  /**
+   * Optional floor, in metres, on the panel height — e.g. to match the height
+   * of the visual it sits beside. Applies even to short text; the extra
+   * height goes to the text rect. `maxHeightMeters` wins if it is lower.
+   */
+  readonly minHeightMeters?: number;
 }
 
 export const DEFAULT_TEXT_STYLE: TextStyle = {
@@ -87,12 +93,12 @@ export function resolveTextStyle(
   // maxLinesPerPage need to agree on.
   const chromeM = chromeHeightM(floorPlaneH);
 
-  let planeH = floorPlaneH;
+  let planeH = Math.max(floorPlaneH, style.minHeightMeters ?? 0);
   if (style.maxHeightMeters !== undefined && lineCount !== undefined) {
     const desiredTextHeightM =
       (Math.max(1, lineCount) * style.lineHeightPx) / pxPerMetre;
     planeH = Math.min(
-      Math.max(chromeM + desiredTextHeightM, floorPlaneH),
+      Math.max(chromeM + desiredTextHeightM, planeH),
       style.maxHeightMeters,
     );
   }

@@ -29,6 +29,7 @@ export function showTranscript(
       position: new Vector3(offset.x, offset.y, 0),
       maxWidthMeters: TRANSCRIPT_PANEL_WIDTH_M,
       maxHeightMeters: TRANSCRIPT_VISUAL_HEIGHT_M,
+      minHeightMeters: TRANSCRIPT_VISUAL_HEIGHT_M,
     });
     stamp(node.text.pickMesh, node.waypointId, "transcript");
     node.group.add(node.text.group);

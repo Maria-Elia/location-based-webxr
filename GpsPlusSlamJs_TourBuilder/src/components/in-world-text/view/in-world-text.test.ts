@@ -219,6 +219,19 @@ describe("createInWorldText — dynamic panel height (maxHeightMeters)", () => {
     expect(height).toBeCloseTo(width * FIXED_ASPECT, 6);
   });
 
+  it("raises a short text's panel to minHeightMeters", async () => {
+    const label = createInWorldText({
+      text: "short",
+      position: new Vector3(),
+      backend: "canvas",
+      minHeightMeters: 1.8,
+      measure,
+      createSurface: () => workingSurface(),
+    });
+    await label.ready;
+    expect(planeSize(label.pickMesh).height).toBeCloseTo(1.8, 6);
+  });
+
   it("grows the panel to fit more text, capped at maxHeightMeters", async () => {
     const label = createInWorldText({
       text: LONG_TEXT,

@@ -77,3 +77,45 @@ describe("resolveTextStyle with dynamic height (maxHeightMeters + lineCount)", (
     expect(resolved.maxLinesPerPage).toBeLessThan(500);
   });
 });
+
+describe("resolveTextStyle with minHeightMeters", () => {
+  const minHeightMeters = 1.8;
+  const floorPlaneH = DEFAULT_TEXT_STYLE.maxWidthMeters * (768 / 1024);
+
+  it("raises the panel to the minimum even for a one-line text", () => {
+    const resolved = resolveTextStyle(
+      { ...DEFAULT_TEXT_STYLE, minHeightMeters, maxHeightMeters: 2.5 },
+      1,
+    );
+    expect(resolved.planeH).toBeCloseTo(minHeightMeters, 6);
+    expect(resolved.floorPlaneH).toBeCloseTo(floorPlaneH, 6);
+    // The extra height goes to the text rect, so more lines fit per page.
+    expect(resolved.maxLinesPerPage).toBeGreaterThan(
+      resolveTextStyle({ ...DEFAULT_TEXT_STYLE }).maxLinesPerPage,
+    );
+  });
+
+  it("applies without lineCount or maxHeightMeters", () => {
+    const resolved = resolveTextStyle({
+      ...DEFAULT_TEXT_STYLE,
+      minHeightMeters,
+    });
+    expect(resolved.planeH).toBeCloseTo(minHeightMeters, 6);
+  });
+
+  it("still grows past the minimum for long text, up to maxHeightMeters", () => {
+    const resolved = resolveTextStyle(
+      { ...DEFAULT_TEXT_STYLE, minHeightMeters: 0.9, maxHeightMeters: 1.8 },
+      500,
+    );
+    expect(resolved.planeH).toBeCloseTo(1.8, 6);
+  });
+
+  it("lets maxHeightMeters win when it is below the minimum", () => {
+    const resolved = resolveTextStyle(
+      { ...DEFAULT_TEXT_STYLE, minHeightMeters: 2, maxHeightMeters: 1.2 },
+      1,
+    );
+    expect(resolved.planeH).toBeCloseTo(1.2, 6);
+  });
+});
