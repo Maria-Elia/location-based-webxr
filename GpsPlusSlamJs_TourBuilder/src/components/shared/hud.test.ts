@@ -71,6 +71,16 @@ describe("mountHud", () => {
     expect(query(container, "viewing-map-toggle")).toBeNull();
   });
 
+  it("a map opened before the HUD mounted can be reflected straight after mount", () => {
+    const { hud } = setup();
+    const map = query(container, "viewing-map-toggle")!;
+    expect(map.getAttribute("aria-pressed")).toBe("false");
+    hud.setMapActive(true);
+    expect(map.getAttribute("aria-pressed")).toBe("true");
+    hud.setMapActive(false);
+    expect(map.getAttribute("aria-pressed")).toBe("false");
+  });
+
   it("renders no autopilot button or hint when onToggleAutopilot is omitted", () => {
     setup(false);
     expect(query(container, "viewing-autopilot")).toBeNull();

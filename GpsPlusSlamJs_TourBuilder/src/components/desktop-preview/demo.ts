@@ -152,6 +152,17 @@ const map = createTourMap(mapHost, {
 });
 let mapVisible = true;
 
+function setMapVisible(visible: boolean): void {
+  mapVisible = visible;
+  if (visible) {
+    map?.show();
+    map?.resize();
+  } else {
+    map?.hide();
+  }
+  hud?.setMapActive(visible);
+}
+
 function refreshMapMarkers(): void {
   const state = store.getState();
   map?.setWaypoints(
@@ -186,15 +197,7 @@ camera.add(audioListener);
 // end-tour concept this single-page demo has no use for).
 let wayfindingEnabled = false;
 hud = mountHud(container, {
-  onToggleMap: () => {
-    mapVisible = !mapVisible;
-    if (mapVisible) {
-      map?.show();
-      map?.resize();
-    } else {
-      map?.hide();
-    }
-  },
+  onToggleMap: () => setMapVisible(!mapVisible),
   onToggleAutopilot: () => {
     const next = !session.isAutopilot();
     session.setAutopilot(next);
@@ -221,8 +224,7 @@ hud.setOsmBuildingsStatus(session.getOsmBuildingsStatus());
 
 // mapHost was already attached (above, before `createTourMap`) — just
 // unhide it now that the rest of the session furniture exists.
-map?.show();
-map?.resize();
+setMapVisible(true);
 
 const adapter = createThreeSceneAdapter({
   parent: session.runtime.getArWorldGroup()!,

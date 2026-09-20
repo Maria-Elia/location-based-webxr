@@ -255,6 +255,17 @@ export function mountViewingApp(
   let unsubscribeTracking: (() => void) | null = null;
   let unsubscribeOsmBuildings: (() => void) | null = null;
   let mapVisible = false;
+  /** The one place `mapVisible` changes: shows/hides the map and tells the HUD. */
+  function setMapVisible(visible: boolean): void {
+    mapVisible = visible;
+    if (visible) {
+      map?.show();
+      map?.resize();
+    } else {
+      map?.hide();
+    }
+    hud?.setMapActive(visible);
+  }
   let wayfindingEnabled = false;
   let destroyed = false;
   // How far the visitor is from the tour's start, as the entry screen last
@@ -415,9 +426,7 @@ export function mountViewingApp(
     // mapHost is now parented at its final layout position (inside `entry`'s
     // element) — only now does Leaflet's size measurement give a real box.
     ensureMap();
-    map?.show();
-    map?.resize();
-    mapVisible = true;
+    setMapVisible(true);
 
     // Hold Enter AR until we know how far the visitor is from the start — but
     // only where AR could run at all; a tour with no position has no start.
@@ -584,15 +593,7 @@ export function mountViewingApp(
     clearScreen();
     wayfindingEnabled = false;
     hud = mountHud(arHost, {
-      onToggleMap: () => {
-        mapVisible = !mapVisible;
-        if (mapVisible) {
-          map?.show();
-          map?.resize();
-        } else {
-          map?.hide();
-        }
-      },
+      onToggleMap: () => setMapVisible(!mapVisible),
       onEndTour: options.onEndTour,
       // Available in both AR and preview (unlike autopilot, which only
       // makes sense in preview) — an opt-in aid, off at the start of every
@@ -611,9 +612,7 @@ export function mountViewingApp(
         : {}),
     });
     arHost.appendChild(mapHost);
-    map?.show();
-    map?.resize();
-    mapVisible = true;
+    setMapVisible(true);
   }
 
   /** VC14: persist as the walk progresses, not only at the end. */

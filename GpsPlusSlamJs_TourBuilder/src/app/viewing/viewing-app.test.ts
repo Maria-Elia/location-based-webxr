@@ -658,6 +658,41 @@ describe("Viewing mode screen flow", () => {
     expect(map.setGpsPosition).toHaveBeenCalledWith(48.5, 11.5);
   });
 
+  it("the Map button reflects the map's open/closed state", async () => {
+    const { controller } = fakeController({ status: "unsupported" });
+    const preview = fakePreviewSession();
+    const createPreviewSession = vi.fn(() => preview);
+
+    mountViewingApp(root, "https://host.example/tour.zip", {
+      ...testDeps({
+        createPreviewSession:
+          createPreviewSession as unknown as ViewingAppDeps["createPreviewSession"],
+      }),
+      createController: () => controller as never,
+    });
+
+    await vi.waitFor(() => {
+      expect(query(root, "grant-access")).not.toBeNull();
+    });
+    await completeOnboarding(root);
+    query(root, "viewing-enter-preview")!.click();
+    await vi.waitFor(() => {
+      expect(query(root, "viewing-map-toggle")).not.toBeNull();
+    });
+
+    const mapButton = query(root, "viewing-map-toggle") as HTMLButtonElement;
+    // The session shell opens the map, so the button starts pressed.
+    expect(mapButton.getAttribute("aria-pressed")).toBe("true");
+    expect(mapButton.getAttribute("aria-label")).toBe("Hide map");
+
+    mapButton.click();
+    expect(mapButton.getAttribute("aria-pressed")).toBe("false");
+    expect(mapButton.getAttribute("aria-label")).toBe("Show map");
+
+    mapButton.click();
+    expect(mapButton.getAttribute("aria-pressed")).toBe("true");
+  });
+
   it("shows the OSM buildings toggle in the preview HUD, labelled from the layer's initial status", async () => {
     const { controller } = fakeController({ status: "unsupported" });
     const preview = fakePreviewSession({ osmBuildingsStatus: "loading" });
