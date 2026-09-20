@@ -5,6 +5,7 @@ import {
   canStart,
   explanationFor,
   gateReducer,
+  createInitialGateState,
   initialGateState,
   type GateState,
 } from "./permission-gate.js";
@@ -124,5 +125,42 @@ describe("audioUnlocked", () => {
     expect(next.camera).toBe("unknown");
     expect(next.gps).toBe("unknown");
     expect(canStart(next)).toBe(false);
+  });
+});
+
+describe("gps-only gate (authoring needs no camera)", () => {
+  const gpsOnly = createInitialGateState(["gps"]);
+
+  it("grantAccessRequested only moves the required kinds", () => {
+    const next = gateReducer(gpsOnly, { type: "grantAccessRequested" });
+    expect(next.gps).toBe("requesting");
+    expect(next.camera).toBe("unknown");
+  });
+
+  it("Start enables on GPS alone, whatever the camera state", () => {
+    const next = gateReducer(gpsOnly, {
+      type: "permissionResult",
+      kind: "gps",
+      granted: true,
+    });
+    expect(canStart(next)).toBe(true);
+  });
+
+  it("a denied camera does not block Start", () => {
+    let next = gateReducer(gpsOnly, {
+      type: "permissionResult",
+      kind: "camera",
+      granted: false,
+    });
+    next = gateReducer(next, {
+      type: "permissionResult",
+      kind: "gps",
+      granted: true,
+    });
+    expect(canStart(next)).toBe(true);
+  });
+
+  it("Start stays disabled until GPS is granted", () => {
+    expect(canStart(gpsOnly)).toBe(false);
   });
 });

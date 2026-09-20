@@ -37,8 +37,9 @@ Start click ─▶ AudioContext.resume() [synchronous, the gesture] ─▶ audio
 ```
 
 `core/permission-gate.ts` is the single source of truth for whether Start may
-be clicked: `canStart(state)` is true only once both `camera` and `gps` read
-`'granted'`, as reported by the browser via the framework's
+be clicked: `canStart(state)` is true only once every _required_ kind reads
+`'granted'` (viewing: camera + gps; authoring passes `required: ['gps']` since
+it never opens the camera), as reported by the browser via the framework's
 `permission-checker`, never by a self-ticked checkbox.
 
 ## Reuse

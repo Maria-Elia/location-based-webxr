@@ -12,9 +12,7 @@
 import "leaflet/dist/leaflet.css";
 
 import {
-  checkCameraPermission,
   checkGeolocationPermission,
-  requestCameraPermission,
   requestGeolocationPermission,
 } from "gps-plus-slam-app-framework/sensors";
 import { buildMapData } from "gps-plus-slam-app-framework/visualization/map-data";
@@ -55,9 +53,9 @@ export function mountAuthoringApp(root: HTMLElement): { destroy(): void } {
   root.appendChild(gateHost);
 
   const gate = mountOnboardingGate(gateHost, {
-    checkCameraPermission,
+    // Authoring is a 2D map + live GPS — it never opens the camera.
+    required: ["gps"],
     checkGeolocationPermission,
-    requestCameraPermission,
     requestGeolocationPermission,
     createAudioContext: () => new AudioContext(),
     onComplete: () => {

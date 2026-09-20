@@ -8,7 +8,11 @@
  * @see plans/2026-08-07-onboarding-plan.md
  */
 
-import type { GateAction, PermissionKind } from "../core/permission-gate.js";
+import {
+  ALL_PERMISSIONS,
+  type GateAction,
+  type PermissionKind,
+} from "../core/permission-gate.js";
 
 /** Matches `gps-plus-slam-app-framework/sensors`'s `PermissionStatus` shape. */
 export interface PermissionStatus {
@@ -18,9 +22,14 @@ export interface PermissionStatus {
 }
 
 export interface OnboardingAdapterDeps {
-  readonly checkCameraPermission: () => Promise<PermissionStatus>;
+  /** Kinds to check/request; defaults to camera + GPS. The camera functions
+   *  may be omitted when `camera` is not required. */
+  readonly required?: readonly PermissionKind[];
+  readonly checkCameraPermission?:
+    (() => Promise<PermissionStatus>) | undefined;
   readonly checkGeolocationPermission: () => Promise<PermissionStatus>;
-  readonly requestCameraPermission: () => Promise<PermissionStatus>;
+  readonly requestCameraPermission?:
+    (() => Promise<PermissionStatus>) | undefined;
   readonly requestGeolocationPermission: () => Promise<PermissionStatus>;
   readonly dispatch: (action: GateAction) => void;
 }
@@ -37,12 +46,21 @@ function toResultAction(
   };
 }
 
+function isRequired(
+  deps: OnboardingAdapterDeps,
+  kind: PermissionKind,
+): boolean {
+  return (deps.required ?? ALL_PERMISSIONS).includes(kind);
+}
+
 /** O4: non-prompting check for both, run once on mount. */
 export async function checkExistingPermissions(
   deps: OnboardingAdapterDeps,
 ): Promise<void> {
-  const camera = await deps.checkCameraPermission();
-  deps.dispatch(toResultAction("camera", camera));
+  if (isRequired(deps, "camera") && deps.checkCameraPermission) {
+    const camera = await deps.checkCameraPermission();
+    deps.dispatch(toResultAction("camera", camera));
+  }
   const gps = await deps.checkGeolocationPermission();
   deps.dispatch(toResultAction("gps", gps));
 }
@@ -70,6 +88,8 @@ export async function requestPermissions(
   deps: OnboardingAdapterDeps,
 ): Promise<void> {
   deps.dispatch({ type: "grantAccessRequested" });
-  await requestOne("camera", deps.requestCameraPermission, deps.dispatch);
+  if (isRequired(deps, "camera") && deps.requestCameraPermission) {
+    await requestOne("camera", deps.requestCameraPermission, deps.dispatch);
+  }
   await requestOne("gps", deps.requestGeolocationPermission, deps.dispatch);
 }

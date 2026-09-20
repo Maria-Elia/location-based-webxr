@@ -9,14 +9,17 @@ Framework-free, browser-API-free. No `getUserMedia`, no `geolocation`, no
 ```ts
 gateReducer(state: GateState, action: GateAction): GateState
 
-canGrantAccess(state: GateState): boolean   // neither item is 'requesting'
-canStart(state: GateState): boolean         // camera === 'granted' && gps === 'granted'
+createInitialGateState(required?: PermissionKind[]): GateState  // default: camera + gps
+canGrantAccess(state: GateState): boolean   // no required item is 'requesting'
+canStart(state: GateState): boolean         // every required item is 'granted'
 explanationFor(state: GateState, kind: 'camera' | 'gps'): string | null
 ```
 
-- **`GateState`** — `{ camera, gps, cameraMessage?, gpsMessage?, audioUnlocked }`.
+- **`GateState`** — `{ camera, gps, cameraMessage?, gpsMessage?, audioUnlocked, required }`.
+  `required` lists the kinds Start waits on and Grant Access prompts for
+  (authoring: `['gps']`; viewing: both).
   `camera`/`gps` are each `'unknown' | 'requesting' | 'granted' | 'denied'`.
-- **`GateAction`** — `grantAccessRequested` (both → `'requesting'`, clears any
+- **`GateAction`** — `grantAccessRequested` (required kinds → `'requesting'`, clears any
   stale message), `permissionResult` (one kind → `'granted'`/`'denied'` +
   message), `audioUnlocked` (only ever flips that one flag).
 

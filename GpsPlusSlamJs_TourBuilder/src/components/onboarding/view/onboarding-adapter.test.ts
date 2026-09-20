@@ -159,3 +159,21 @@ describe("requestPermissions", () => {
     });
   });
 });
+
+describe("gps-only (no camera dependencies)", () => {
+  it("never checks or requests the camera", async () => {
+    const { deps, actions } = harness({
+      required: ["gps"],
+      checkCameraPermission: undefined,
+      requestCameraPermission: undefined,
+    });
+
+    await checkExistingPermissions(deps);
+    await requestPermissions(deps);
+
+    const kinds = actions.flatMap((a) =>
+      a.type === "permissionResult" ? [a.kind] : [],
+    );
+    expect(kinds).toEqual(["gps", "gps"]);
+  });
+});

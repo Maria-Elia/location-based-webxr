@@ -20,13 +20,25 @@ export interface GateState {
   readonly cameraMessage?: string | undefined;
   readonly gpsMessage?: string | undefined;
   readonly audioUnlocked: boolean;
+  /** Kinds Start waits on and Grant Access prompts for. Authoring needs GPS
+   *  only; viewing needs both. */
+  readonly required: readonly PermissionKind[];
 }
 
-export const initialGateState: GateState = {
-  camera: "unknown",
-  gps: "unknown",
-  audioUnlocked: false,
-};
+export const ALL_PERMISSIONS: readonly PermissionKind[] = ["camera", "gps"];
+
+export function createInitialGateState(
+  required: readonly PermissionKind[] = ALL_PERMISSIONS,
+): GateState {
+  return {
+    camera: "unknown",
+    gps: "unknown",
+    audioUnlocked: false,
+    required,
+  };
+}
+
+export const initialGateState: GateState = createInitialGateState();
 
 export type GateAction =
   | { readonly type: "grantAccessRequested" }
@@ -43,10 +55,12 @@ export function gateReducer(state: GateState, action: GateAction): GateState {
     case "grantAccessRequested":
       return {
         ...state,
-        camera: "requesting",
-        gps: "requesting",
-        cameraMessage: undefined,
-        gpsMessage: undefined,
+        ...(state.required.includes("camera")
+          ? { camera: "requesting", cameraMessage: undefined }
+          : {}),
+        ...(state.required.includes("gps")
+          ? { gps: "requesting", gpsMessage: undefined }
+          : {}),
       };
     case "permissionResult": {
       const status: PermissionState = action.granted ? "granted" : "denied";
@@ -60,11 +74,11 @@ export function gateReducer(state: GateState, action: GateAction): GateState {
 }
 
 export function canGrantAccess(state: GateState): boolean {
-  return state.camera !== "requesting" && state.gps !== "requesting";
+  return state.required.every((kind) => state[kind] !== "requesting");
 }
 
 export function canStart(state: GateState): boolean {
-  return state.camera === "granted" && state.gps === "granted";
+  return state.required.every((kind) => state[kind] === "granted");
 }
 
 export function explanationFor(
