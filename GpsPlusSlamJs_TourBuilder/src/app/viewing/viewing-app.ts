@@ -65,7 +65,10 @@ import { computeMarkerViewModels } from "../../components/map/core/map-marker-st
 import { createPreviewSession } from "../../components/desktop-preview/view/preview-session.js";
 import type { PreviewSession } from "../../components/desktop-preview/view/preview-session.js";
 import type { OsmBuildingStatus } from "../../components/desktop-preview/view/osm-building-layer.js";
-import { computePreviewStart } from "../../components/desktop-preview/core/preview-start.js";
+import {
+  computePreviewStart,
+  tourStartCoord,
+} from "../../components/desktop-preview/core/preview-start.js";
 import { requestWakeLock, type WakeLockHandle } from "../wake-lock.js";
 import {
   startArScene,
@@ -87,7 +90,20 @@ import {
   type TourEntryScreen,
 } from "./screens.js";
 
+import { locateVisitor, type LocateHandle } from "./locate-visitor.js";
+import {
+  classifyStartDistance,
+  deriveEntryView,
+  distanceToStartM,
+  isDecisive,
+  type StartProximity,
+} from "./start-distance.js";
+
 type ControllerFactory = typeof createEnableGpsArController;
+
+/** How long the entry screen waits for a fix that settles how far away the
+ *  visitor is, before falling back to the unchanged AR entry. */
+const LOCATE_TIMEOUT_MS = 8_000;
 
 export interface ViewingAppDeps {
   readonly openRemoteTour: typeof openRemoteTour;
@@ -100,6 +116,7 @@ export interface ViewingAppDeps {
   readonly requestGeolocationPermission: typeof requestGeolocationPermission;
   readonly startArScene: typeof startArScene;
   readonly createPreviewSession: typeof createPreviewSession;
+  readonly locateVisitor: typeof locateVisitor;
   readonly arRuntime: ArRuntime;
   readonly progressStorage: ProgressStorage | null | undefined;
   /**
@@ -132,6 +149,7 @@ function defaultDeps(): ViewingAppDeps {
     requestGeolocationPermission,
     startArScene,
     createPreviewSession,
+    locateVisitor,
     arRuntime: defaultArRuntime,
     progressStorage: undefined,
     forcePreview: false,
@@ -254,8 +272,18 @@ export function mountViewingApp(
   let mapVisible = false;
   let wayfindingEnabled = false;
   let destroyed = false;
+  // How far the visitor is from the tour's start, as the entry screen last
+  // learned it. `locating` while a fix is being waited for.
+  let proximity: StartProximity | "locating" = { kind: "unknown" };
+  let locate: LocateHandle | null = null;
+
+  function cancelLocate(): void {
+    locate?.cancel();
+    locate = null;
+  }
 
   function clearScreen(): void {
+    cancelLocate();
     screen?.destroy();
     screen = null;
     entryScreen = null;
@@ -406,43 +434,64 @@ export function mountViewingApp(
     map?.resize();
     mapVisible = true;
 
+    // Hold Enter AR until we know how far the visitor is from the start — but
+    // only where AR could run at all; a tour with no position has no start.
+    proximity =
+      tourStartCoord(tour) === undefined ? { kind: "unknown" } : "locating";
+
     // Reflect what the controller already knows about this device.
     void controller.refreshSupport().then(() => {
       if (destroyed || entryScreen !== entry) return;
-      applyControllerState(entry);
+      if (controller.getState().status === "unsupported") {
+        // Nothing to measure: without AR the visitor only gets the preview.
+        proximity = { kind: "unknown" };
+      } else {
+        startLocating(entry);
+      }
+      applyEntryState(entry);
     });
-    applyControllerState(entry);
+    applyEntryState(entry);
   }
 
-  function applyControllerState(entry: TourEntryScreen): void {
+  /** One short read of the visitor's position, classified against the tour's
+   *  start. Decided once per entry screen (SG7): it never re-flips buttons
+   *  under the visitor's thumb. */
+  function startLocating(entry: TourEntryScreen): void {
+    const start = tour === null ? undefined : tourStartCoord(tour);
+    if (start === undefined) return;
+    cancelLocate();
+    proximity = "locating";
+    const handle = deps.locateVisitor({
+      timeoutMs: LOCATE_TIMEOUT_MS,
+      isDecisive: (fix) => isDecisive(fix, start),
+    });
+    locate = handle;
+    void handle.result.then((fix) => {
+      if (destroyed || locate !== handle) return;
+      locate = null;
+      proximity =
+        fix === null
+          ? { kind: "unknown" }
+          : classifyStartDistance(distanceToStartM(fix, start), fix.accuracy);
+      if (entryScreen === entry) applyEntryState(entry);
+    });
+  }
+
+  function applyEntryState(entry: TourEntryScreen): void {
     const { status, error } = controller.getState();
     // VC25: without AR the tour is not over — the same scene runs in the
-    // desktop preview, so offer it rather than leaving a dead end.
-    entry.setPreviewOffered(deps.forcePreview || status === "unsupported");
-    switch (status) {
-      case "unsupported":
-        entry.setEnterArEnabled(false);
-        entry.setArStatus(
-          "AR is not available in this browser. You can walk the tour on this screen instead, or follow it on the map.",
-          "error",
-        );
-        break;
-      case "checking":
-        entry.setEnterArEnabled(false);
-        entry.setArStatus("Checking AR support…", "info");
-        break;
-      case "error":
-        entry.setEnterArEnabled(true);
-        entry.setArStatus(
-          error ??
-            "AR could not be started. Check camera and location access, then try again.",
-          "error",
-        );
-        break;
-      default:
-        entry.setEnterArEnabled(true);
-        entry.setArStatus("", "info");
-    }
+    // desktop preview, so offer it rather than leaving a dead end. The same
+    // goes for a visitor too far from the start for AR to ever trigger.
+    const view = deriveEntryView({
+      controllerStatus: status,
+      controllerError: error ?? null,
+      forcePreview: deps.forcePreview,
+      proximity,
+    });
+    entry.setEnterArVisible(view.arVisible);
+    entry.setEnterArEnabled(view.arEnabled);
+    entry.setPreviewOffered(view.previewOffered);
+    entry.setArStatus(view.message?.text ?? "", view.message?.tone ?? "info");
   }
 
   function restartTour(): void {

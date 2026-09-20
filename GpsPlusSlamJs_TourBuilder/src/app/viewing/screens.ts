@@ -96,6 +96,9 @@ export interface TourEntryScreen extends Screen {
   /** AR availability / permission feedback, in place, without remounting. */
   setArStatus(message: string, tone: "info" | "error"): void;
   setEnterArEnabled(enabled: boolean): void;
+  /** Remove Enter AR altogether (the visitor is too far away for it to work);
+   *  the preview button then becomes the primary action. */
+  setEnterArVisible(visible: boolean): void;
   setEnterArLabel(label: string): void;
   /** Show/hide the desktop-preview entry (plan VC25). */
   setPreviewOffered(offered: boolean): void;
@@ -137,7 +140,7 @@ export function mountTourEntryScreen(
   // a second, weaker way in.
   const preview = document.createElement("button");
   preview.className = "secondary";
-  preview.textContent = "Walk it on this screen";
+  preview.textContent = "Preview here";
   preview.dataset.testid = "viewing-enter-preview";
   preview.addEventListener("click", () => options.onEnterPreview());
 
@@ -167,6 +170,10 @@ export function mountTourEntryScreen(
     },
     setEnterArEnabled(enabled) {
       enterAr.disabled = !enabled;
+    },
+    setEnterArVisible(visible) {
+      enterAr.hidden = !visible;
+      preview.className = visible ? "secondary" : "primary";
     },
     setEnterArLabel(label) {
       enterAr.textContent = label;
