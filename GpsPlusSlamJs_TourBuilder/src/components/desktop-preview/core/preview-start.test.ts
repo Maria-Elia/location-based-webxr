@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Tour, TourCoord } from "../../../store/types.js";
-import { computePreviewStart } from "./preview-start.js";
+import { computePreviewStart, tourStartCoord } from "./preview-start.js";
 import { createPreviewFrame } from "./preview-frame.js";
 
 const GATE: TourCoord = { lat: 48.137, lon: 11.575 };
@@ -75,5 +75,24 @@ describe("preview start", () => {
       start: { x: 0, z: 0, headingRad: 0 },
       route: [],
     });
+  });
+});
+
+describe("tour start coordinate", () => {
+  it("is the trailhead when the tour has a breadcrumb", () => {
+    const trailhead: TourCoord = { lat: 48.1365, lon: 11.575 };
+    const tour = tourWith({ breadcrumb: [trailhead, GATE] });
+
+    expect(tourStartCoord(tour)).toEqual(trailhead);
+  });
+
+  it("is the first stop when there is no breadcrumb", () => {
+    expect(tourStartCoord(tourWith({ breadcrumb: [] }))).toEqual(GATE);
+  });
+
+  it("is undefined for a tour with neither", () => {
+    expect(
+      tourStartCoord(tourWith({ breadcrumb: [], waypoints: [] })),
+    ).toBeUndefined();
   });
 });
