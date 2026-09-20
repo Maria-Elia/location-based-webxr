@@ -537,6 +537,18 @@
   width: 100%;
 }
 
+/* The status line is an empty <p> until an export runs. Its UA default
+   1em margins, `min-height: 1.2em` and the column's 8px gap otherwise stack
+   up as a ~50px dead strip under the button, so drop the margins and hide
+   it while empty. */
+.authoring-sections .export-action p[data-testid="export-status"] {
+  margin: 0;
+}
+
+.authoring-sections .export-action p[data-testid="export-status"]:empty {
+  display: none;
+}
+
 .empty-state {
   margin: 0;
   padding: 24px 16px;
