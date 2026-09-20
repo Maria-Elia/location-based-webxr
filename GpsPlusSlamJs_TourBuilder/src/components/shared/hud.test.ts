@@ -87,90 +87,10 @@ describe("mountHud", () => {
     expect(query(container, "viewing-autopilot-hint")).toBeNull();
   });
 
-  it("shows the Auto-walk hint on mount, visible (not hidden)", () => {
-    setup();
-    const hint = query(container, "viewing-autopilot-hint")!;
-    expect(hint).not.toBeNull();
-    expect(hint.hidden).toBe(false);
-  });
-
-  it("the hint's own × button dismisses it", () => {
-    setup();
-    const hint = query(container, "viewing-autopilot-hint")!;
-    const close = hint.querySelector<HTMLButtonElement>(".hud-hint-close")!;
-
-    close.click();
-
-    expect(hint.hidden).toBe(true);
-  });
-
-  it("dismissAutopilotHint() hides the hint (the toggle button's own click path)", () => {
-    const { hud } = setup();
-    const hint = query(container, "viewing-autopilot-hint")!;
-
-    hud.dismissAutopilotHint();
-
-    expect(hint.hidden).toBe(true);
-  });
-
-  it("dismissAutopilotHint() is a harmless no-op when there is no autopilot toggle", () => {
-    const { hud } = setup(false);
-    expect(() => hud.dismissAutopilotHint()).not.toThrow();
-  });
-
   it("clicking Auto-walk calls onToggleAutopilot", () => {
     const { onToggleAutopilot } = setup();
     query(container, "viewing-autopilot")!.click();
     expect(onToggleAutopilot).toHaveBeenCalledOnce();
-  });
-
-  it("the hint auto-dismisses after its timeout, and destroy() cancels a still-pending timer", () => {
-    vi.useFakeTimers();
-    try {
-      const { hud } = setup();
-      const hint = query(container, "viewing-autopilot-hint")!;
-
-      vi.advanceTimersByTime(7999);
-      expect(hint.hidden).toBe(false);
-      vi.advanceTimersByTime(1);
-      expect(hint.hidden).toBe(true);
-
-      // A second setup, destroyed before its timer fires: must not throw
-      // when that timer's callback would otherwise later touch a removed
-      // element.
-      const { hud: hud2 } = setup();
-      hud2.destroy();
-      expect(() => vi.advanceTimersByTime(10000)).not.toThrow();
-      void hud;
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it("shows the Wayfinding hint on mount, visible (not hidden)", () => {
-    setup();
-    const hint = query(container, "viewing-wayfinding-hint")!;
-    expect(hint).not.toBeNull();
-    expect(hint.hidden).toBe(false);
-  });
-
-  it("the Wayfinding hint's own × button dismisses it", () => {
-    setup();
-    const hint = query(container, "viewing-wayfinding-hint")!;
-    const close = hint.querySelector<HTMLButtonElement>(".hud-hint-close")!;
-
-    close.click();
-
-    expect(hint.hidden).toBe(true);
-  });
-
-  it("dismissWayfindingHint() hides the hint (the toggle button's own click path)", () => {
-    const { hud } = setup();
-    const hint = query(container, "viewing-wayfinding-hint")!;
-
-    hud.dismissWayfindingHint();
-
-    expect(hint.hidden).toBe(true);
   });
 
   it("clicking Wayfinding calls onToggleWayfinding", () => {
@@ -179,18 +99,89 @@ describe("mountHud", () => {
     expect(onToggleWayfinding).toHaveBeenCalledOnce();
   });
 
-  it("the Wayfinding hint auto-dismisses after its timeout", () => {
-    vi.useFakeTimers();
-    try {
+  describe("hint bubbles show one at a time", () => {
+    const autopilotHint = () => query(container, "viewing-autopilot-hint")!;
+    const wayfindingHint = () => query(container, "viewing-wayfinding-hint")!;
+    const close = (hint: HTMLElement) =>
+      hint.querySelector<HTMLButtonElement>(".hud-hint-close")!.click();
+
+    it("on mount only the Auto-walk hint is visible", () => {
       setup();
-      const hint = query(container, "viewing-wayfinding-hint")!;
-      vi.advanceTimersByTime(7999);
-      expect(hint.hidden).toBe(false);
-      vi.advanceTimersByTime(1);
-      expect(hint.hidden).toBe(true);
-    } finally {
-      vi.useRealTimers();
-    }
+      expect(autopilotHint().hidden).toBe(false);
+      expect(wayfindingHint().hidden).toBe(true);
+    });
+
+    it("the Wayfinding hint appears after the Auto-walk hint's close button", () => {
+      setup();
+      close(autopilotHint());
+      expect(autopilotHint().hidden).toBe(true);
+      expect(wayfindingHint().hidden).toBe(false);
+    });
+
+    it("the Wayfinding hint appears after dismissAutopilotHint()", () => {
+      const { hud } = setup();
+      hud.dismissAutopilotHint();
+      expect(wayfindingHint().hidden).toBe(false);
+    });
+
+    it("the Wayfinding hint appears when the Auto-walk hint times out, and its own 8s starts then", () => {
+      vi.useFakeTimers();
+      try {
+        setup();
+        vi.advanceTimersByTime(8000);
+        expect(autopilotHint().hidden).toBe(true);
+        expect(wayfindingHint().hidden).toBe(false);
+
+        vi.advanceTimersByTime(7999);
+        expect(wayfindingHint().hidden).toBe(false);
+        vi.advanceTimersByTime(1);
+        expect(wayfindingHint().hidden).toBe(true);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("with no Auto-walk button the Wayfinding hint is visible on mount", () => {
+      setup(false);
+      expect(wayfindingHint().hidden).toBe(false);
+    });
+
+    it("dismissWayfindingHint() while queued means it never appears", () => {
+      const { hud } = setup();
+      hud.dismissWayfindingHint();
+      hud.dismissAutopilotHint();
+      expect(wayfindingHint().hidden).toBe(true);
+    });
+
+    it("the Wayfinding hint's own × dismisses it, and nothing re-appears", () => {
+      const { hud } = setup(false);
+      close(wayfindingHint());
+      expect(wayfindingHint().hidden).toBe(true);
+      hud.dismissAutopilotHint(); // harmless: no autopilot
+      expect(wayfindingHint().hidden).toBe(true);
+    });
+
+    it("dismissWayfindingHint() hides a shown hint", () => {
+      const { hud } = setup(false);
+      hud.dismissWayfindingHint();
+      expect(wayfindingHint().hidden).toBe(true);
+    });
+
+    it("dismissAutopilotHint() is a harmless no-op when there is no autopilot toggle", () => {
+      const { hud } = setup(false);
+      expect(() => hud.dismissAutopilotHint()).not.toThrow();
+    });
+
+    it("destroy() cancels pending timers", () => {
+      vi.useFakeTimers();
+      try {
+        const { hud } = setup();
+        hud.destroy();
+        expect(() => vi.advanceTimersByTime(20000)).not.toThrow();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 
   it("setStatus/showNotice update their elements", () => {

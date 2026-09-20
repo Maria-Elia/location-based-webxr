@@ -127,22 +127,29 @@ export function mountHud(container: HTMLElement, options: HudOptions): Hud {
   /**
    * A one-time callout above a toggle button rather than turning the
    * feature on by itself: the visitor stays in control from the first
-   * frame, but still finds out the feature exists instead of only via the
-   * status line's prose. Shared by autopilot and the wayfinding guide —
-   * same bubble, same dismiss/close/auto-timeout behavior, different text.
+   * frame, but still finds out the feature exists. Starts hidden ("queued");
+   * `show()` reveals it and starts its own timeout, `dismiss()` ends it for
+   * good (a dismissed-while-queued hint never appears) and fires `onGone`
+   * so a hint waiting behind this one can take its turn.
    */
   function mountHintedToggle(
     button: HTMLButtonElement,
     hintTestid: string,
     hintText: string,
     timeoutMs: number,
-  ): { readonly wrap: HTMLDivElement; dismiss: () => void } {
+    onGone?: () => void,
+  ): {
+    readonly wrap: HTMLDivElement;
+    readonly show: () => void;
+    readonly dismiss: () => void;
+  } {
     const wrap = document.createElement("div");
     wrap.className = "hud-hint-wrap";
 
     const hint = document.createElement("div");
     hint.className = "hud-hint";
     hint.dataset.testid = hintTestid;
+    hint.hidden = true;
 
     const hintTextEl = document.createElement("span");
     hintTextEl.textContent = hintText;
@@ -157,59 +164,70 @@ export function mountHud(container: HTMLElement, options: HudOptions): Hud {
 
     hint.append(hintTextEl, hintClose, hintArrow);
 
+    let phase: "queued" | "shown" | "gone" = "queued";
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
     const dismiss = (): void => {
-      if (hint.hidden) return;
+      if (phase === "gone") return;
+      phase = "gone";
       hint.hidden = true;
       clearTimeout(timer);
+      onGone?.();
+    };
+    const show = (): void => {
+      if (phase !== "queued") return;
+      phase = "shown";
+      hint.hidden = false;
+      timer = setTimeout(dismiss, timeoutMs);
     };
     hintClose.addEventListener("click", dismiss);
-    const timer = setTimeout(dismiss, timeoutMs);
 
     wrap.append(hint, button);
-    return { wrap, dismiss };
+    return { wrap, show, dismiss };
   }
 
   const osmBuildingsToggle = textToggle(
     "viewing-osm-buildings-toggle",
     buildingsAppearance("off").label,
   );
+
+  // Wayfinding's hint is created first so Auto-walk's can release it.
+  const wayfindingHint = mountHintedToggle(
+    wayfinding.element,
+    "viewing-wayfinding-hint",
+    "Try Wayfinding to find your way",
+    WAYFINDING_HINT_TIMEOUT_MS,
+  );
+  const autopilotHint = options.onToggleAutopilot
+    ? mountHintedToggle(
+        autopilot.element,
+        "viewing-autopilot-hint",
+        "Try Auto-walk to move hands-free",
+        AUTOPILOT_HINT_TIMEOUT_MS,
+        wayfindingHint.show,
+      )
+    : undefined;
+
   if (options.onToggleOsmBuildings) {
     osmBuildingsToggle.element.addEventListener("click", () =>
       options.onToggleOsmBuildings?.(),
     );
     controls.appendChild(osmBuildingsToggle.element);
   }
-
-  let hideAutopilotHint: (() => void) | undefined;
-  if (options.onToggleAutopilot) {
-    const { wrap, dismiss } = mountHintedToggle(
-      autopilot.element,
-      "viewing-autopilot-hint",
-      "Try Auto-walk to move hands-free",
-      AUTOPILOT_HINT_TIMEOUT_MS,
-    );
-    hideAutopilotHint = dismiss;
+  if (autopilotHint) {
     autopilot.element.addEventListener("click", () =>
       options.onToggleAutopilot?.(),
     );
-    controls.appendChild(wrap);
+    controls.appendChild(autopilotHint.wrap);
   }
-
-  // Map + End tour sit between the two hinted toggles on purpose: both
-  // hint bubbles are much wider than their own button and both show on
-  // mount, so placing Auto-walk and Wayfinding directly adjacent makes
-  // the two callouts overlap.
+  controls.appendChild(wayfindingHint.wrap);
   if (options.onToggleMap) controls.appendChild(mapToggle.element);
   if (options.onEndTour) controls.appendChild(endTour);
 
-  const { wrap: wayfindingWrap, dismiss: hideWayfindingHint } =
-    mountHintedToggle(
-      wayfinding.element,
-      "viewing-wayfinding-hint",
-      "Try Wayfinding to find your way",
-      WAYFINDING_HINT_TIMEOUT_MS,
-    );
-  controls.appendChild(wayfindingWrap);
+  // Only one bubble is on screen at a time, so bubble width no longer
+  // constrains control order. Auto-walk goes first; with no Auto-walk button
+  // (the phone AR session) Wayfinding has nothing to queue behind.
+  (autopilotHint ?? wayfindingHint).show();
 
   element.append(status, notice, controls);
   container.appendChild(element);
@@ -239,14 +257,15 @@ export function mountHud(container: HTMLElement, options: HudOptions): Hud {
       osmBuildingsToggle.set(appearance.label, appearance.pressed);
     },
     dismissAutopilotHint() {
-      hideAutopilotHint?.();
+      autopilotHint?.dismiss();
     },
     dismissWayfindingHint() {
-      hideWayfindingHint();
+      wayfindingHint.dismiss();
     },
     destroy() {
-      hideAutopilotHint?.();
-      hideWayfindingHint();
+      // Wayfinding first: dismissing Auto-walk would otherwise release it.
+      wayfindingHint.dismiss();
+      autopilotHint?.dismiss();
       element.remove();
     },
   };
