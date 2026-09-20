@@ -337,6 +337,36 @@ describe("transcript billboarding (plan A14)", () => {
   });
 });
 
+describe("waypoint billboarding under a rotated arWorldGroup", () => {
+  it("faces the camera in WORLD space when the parent carries an alignment yaw", () => {
+    const h = setup();
+    h.adapter.createWaypointRoot("wp-1", COORD);
+    const group = h.parent.getObjectByName("waypoint-wp-1")!;
+    // The alignment matrix on arWorldGroup rotates AR-odometry space onto
+    // GPS-world space by an arbitrary heading; identity only on desktop.
+    h.parent.rotation.y = 0.9;
+    h.parent.position.set(3, 0, -4);
+    group.position.set(20, 0, 5);
+    h.camera.position.set(8, 1.6, -30);
+    h.parent.updateMatrixWorld(true);
+
+    h.adapter.update(0);
+    h.parent.updateMatrixWorld(true);
+
+    const worldPos = group.getWorldPosition(new Vector3());
+    const front = new Vector3(0, 0, 1)
+      .transformDirection(group.matrixWorld)
+      .setY(0)
+      .normalize();
+    const toCamera = h.camera
+      .getWorldPosition(new Vector3())
+      .sub(worldPos)
+      .setY(0)
+      .normalize();
+    expect(front.distanceTo(toCamera)).toBeLessThan(1e-6);
+  });
+});
+
 describe("wayfinding guide (plan 2026-09-17)", () => {
   it("renders an indicator once setWayfindingTarget is called, and clears it on null", () => {
     const h = setup();
