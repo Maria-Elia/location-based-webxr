@@ -507,6 +507,10 @@
   text-align: center;
 }
 
+.authoring-sections .export-action button.export-button {
+  width: 100%;
+}
+
 .empty-state {
   margin: 0;
   padding: 24px 16px;

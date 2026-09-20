@@ -69,7 +69,8 @@ const tourMap = createTourMap(mapHost, {
     dispatch(updateWaypoint({ id, changes: { position: { lat, lon } } }));
   },
   onDropWaypointHere: (lat, lon) => {
-    session.dropWaypoint({ lat, lon });
+    const id = session.dropWaypoint({ lat, lon });
+    if (id !== null) authoringView.focusWaypoint(id);
   },
   getObscuredBottomPx: () =>
     window.innerWidth > 720 ? 0 : authoringRoot.getBoundingClientRect().height,
@@ -117,7 +118,7 @@ const session = createAuthoringSession({
   filesAssetProvider,
 });
 
-mountAuthoringView(authoringRoot, {
+const authoringView = mountAuthoringView(authoringRoot, {
   session,
   subscribe: store.subscribe,
   getState: store.getState,

@@ -183,7 +183,8 @@ async function mountAuthoringTools(
       dispatch(updateWaypoint({ id, changes: { position: { lat, lon } } }));
     },
     onDropWaypointHere: (lat, lon) => {
-      session.dropWaypoint({ lat, lon });
+      const id = session.dropWaypoint({ lat, lon });
+      if (id !== null) view.focusWaypoint(id);
     },
     // On desktop the panel is a sidebar (doesn't cover the map's bottom
     // edge at all); on mobile it's a bottom sheet that does, and its own

@@ -129,16 +129,17 @@
 }
 
 .hud-hint-arrow {
+  --hint-arrow-right: 12px;
   position: absolute;
   top: 100%;
-  right: 12px; /* centre (19px) ≈ the 40px button's centre */
+  right: var(--hint-arrow-right); /* centre (19px) ≈ the 40px button's centre */
   color: var(--primary, #3d5488);
   line-height: 0;
 }
 
 @media (pointer: coarse) {
   .hud-hint-arrow {
-    right: 17px; /* 48px coarse-pointer button */
+    --hint-arrow-right: 17px; /* 48px coarse-pointer button */
   }
 }
 
