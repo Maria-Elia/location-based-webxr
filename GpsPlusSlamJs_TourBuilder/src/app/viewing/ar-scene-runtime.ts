@@ -32,7 +32,7 @@ interface SceneStore {
 
 /** Minimal XR shapes — TourBuilder carries no WebXR type dependency, and
  *  component 8's own `XrSessionLike` takes the same structural approach. */
-interface XrSelectEventLike {
+export interface XrSelectEventLike {
   readonly inputSource: { readonly targetRaySpace?: unknown };
   readonly frame?: {
     getPose(
@@ -96,6 +96,38 @@ export interface ArSceneHandle {
   readonly scene: TourScene;
 }
 
+/**
+ * The select ray as a scene-world matrix. `getPose` yields a raw WebXR-space
+ * pose, but pick targets live in aligned NUE space under `arWorldGroup`; the
+ * camera's parent (`arpose`, below `basisChangeNode`) is exactly the node that
+ * maps WebXR space into that frame, so the ray must be lifted through it.
+ * Skipping this makes taps miss once alignment / the basis change is non-identity.
+ */
+export function resolveTargetRayMatrix(
+  event: XrSelectEventLike,
+  referenceSpace: unknown,
+  camera: PerspectiveCamera,
+  out: Matrix4,
+): Matrix4 | null {
+  const targetRaySpace = event.inputSource.targetRaySpace;
+  if (
+    event.frame === undefined ||
+    referenceSpace === null ||
+    targetRaySpace === undefined
+  ) {
+    return null;
+  }
+  const pose = event.frame.getPose(targetRaySpace, referenceSpace);
+  if (!pose) return null;
+  out.fromArray(Array.from(pose.transform.matrix));
+  const parent = camera.parent;
+  if (parent !== null) {
+    parent.updateWorldMatrix(true, false);
+    out.premultiply(parent.matrixWorld);
+  }
+  return out;
+}
+
 export function startArScene(options: StartArSceneOptions): ArSceneHandle {
   const { runtime, store } = options;
 
@@ -150,20 +182,13 @@ export function startArScene(options: StartArSceneOptions): ArSceneHandle {
           // framework's own reference space — three may install an offset
           // space, and a self-requested one is not guaranteed to agree, which
           // shows up as taps that miss what the visitor aimed at.
-          getTargetRayMatrix: (event: XrSelectEventLike): Matrix4 | null => {
-            const referenceSpace = runtime.getXrReferenceSpace();
-            const targetRaySpace = event.inputSource.targetRaySpace;
-            if (
-              event.frame === undefined ||
-              referenceSpace === null ||
-              targetRaySpace === undefined
-            ) {
-              return null;
-            }
-            const pose = event.frame.getPose(targetRaySpace, referenceSpace);
-            if (!pose) return null;
-            return scratchMatrix.fromArray(Array.from(pose.transform.matrix));
-          },
+          getTargetRayMatrix: (event: XrSelectEventLike) =>
+            resolveTargetRayMatrix(
+              event,
+              runtime.getXrReferenceSpace(),
+              camera,
+              scratchMatrix,
+            ),
         }
       : options.domElement
         ? { domElement: options.domElement }

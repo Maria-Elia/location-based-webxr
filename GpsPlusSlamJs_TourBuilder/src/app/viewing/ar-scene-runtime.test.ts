@@ -4,6 +4,7 @@
 import {
   AudioContext as ThreeAudioContext,
   Group,
+  Matrix4,
   PerspectiveCamera,
   Vector3,
 } from "three";
@@ -14,7 +15,11 @@ import { loadTour } from "../../store/tour-slice.js";
 import { createViewingStore } from "../../store/viewing-store.js";
 import type { AssetProvider } from "../../store/types.js";
 import type { ArSeams } from "./ar-seams.js";
-import { startArScene, type ArRuntime } from "./ar-scene-runtime.js";
+import {
+  resolveTargetRayMatrix,
+  startArScene,
+  type ArRuntime,
+} from "./ar-scene-runtime.js";
 
 function fakeAudioContext() {
   const context = {
@@ -96,5 +101,38 @@ describe("startArScene", () => {
     for (const update of frameUpdates) update(0.016, 1);
     expect(log[0]).toBe("update");
     expect(log).toContain("getUserWorldPos");
+  });
+});
+
+describe("resolveTargetRayMatrix", () => {
+  const event = (matrix: number[]) => ({
+    inputSource: { targetRaySpace: {} },
+    frame: { getPose: () => ({ transform: { matrix } }) },
+  });
+
+  it("lifts the WebXR-space ray through the camera's parent into scene space", () => {
+    const world = new Group();
+    world.position.set(10, 0, 0);
+    const arpose = new Group();
+    world.add(arpose);
+    const camera = new PerspectiveCamera();
+    arpose.add(camera);
+    const pose = new Matrix4().makeTranslation(0, 0, -1).toArray();
+
+    const out = resolveTargetRayMatrix(event(pose), {}, camera, new Matrix4());
+
+    const origin = new Vector3().setFromMatrixPosition(out as Matrix4);
+    expect(origin.toArray()).toEqual([10, 0, -1]);
+  });
+
+  it("returns null without a frame or reference space", () => {
+    const camera = new PerspectiveCamera();
+    const noFrame = { inputSource: { targetRaySpace: {} } };
+    expect(
+      resolveTargetRayMatrix(noFrame, {}, camera, new Matrix4()),
+    ).toBeNull();
+    expect(
+      resolveTargetRayMatrix(event([]), null, camera, new Matrix4()),
+    ).toBeNull();
   });
 });
