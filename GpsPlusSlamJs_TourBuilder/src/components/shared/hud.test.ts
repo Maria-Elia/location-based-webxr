@@ -57,12 +57,57 @@ describe("mountHud", () => {
     expect(query(container, "viewing-end-tour")).toBeNull();
   });
 
-  it("clicking Map/End tour calls their handlers when given", () => {
-    const { onToggleMap, onEndTour } = setup();
+  it("clicking Map calls onToggleMap", () => {
+    const { onToggleMap } = setup();
     query(container, "viewing-map-toggle")!.click();
-    query(container, "viewing-end-tour")!.click();
     expect(onToggleMap).toHaveBeenCalledOnce();
-    expect(onEndTour).toHaveBeenCalledOnce();
+  });
+
+  describe("End tour confirm", () => {
+    const endDialog = () =>
+      query(container, "viewing-end-tour-dialog") as HTMLDialogElement;
+
+    it("clicking End tour opens the dialog and does NOT end the tour", () => {
+      const { onEndTour } = setup();
+      expect(endDialog().open).toBe(false);
+
+      query(container, "viewing-end-tour")!.click();
+
+      expect(endDialog().open).toBe(true);
+      expect(onEndTour).not.toHaveBeenCalled();
+      expect(document.activeElement).toBe(
+        query(container, "viewing-end-tour-cancel"),
+      );
+    });
+
+    it("Cancel closes without ending", () => {
+      const { onEndTour } = setup();
+      query(container, "viewing-end-tour")!.click();
+      query(container, "viewing-end-tour-cancel")!.click();
+      expect(endDialog().open).toBe(false);
+      expect(onEndTour).not.toHaveBeenCalled();
+    });
+
+    it("End calls onEndTour once and closes", () => {
+      const { onEndTour } = setup();
+      query(container, "viewing-end-tour")!.click();
+      query(container, "viewing-end-tour-confirm")!.click();
+      expect(onEndTour).toHaveBeenCalledOnce();
+      expect(endDialog().open).toBe(false);
+    });
+
+    it("Escape cancels", () => {
+      const { onEndTour } = setup();
+      query(container, "viewing-end-tour")!.click();
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+      expect(endDialog().open).toBe(false);
+      expect(onEndTour).not.toHaveBeenCalled();
+    });
+
+    it("has no dialog when onEndTour is omitted", () => {
+      setup(true, { withEndTour: false });
+      expect(query(container, "viewing-end-tour-dialog")).toBeNull();
+    });
   });
 
   it("setMapActive is a harmless no-op without a map toggle", () => {

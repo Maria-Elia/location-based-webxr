@@ -264,6 +264,12 @@ function controllableLocate() {
   };
 }
 
+/** End tour now asks for confirmation: click the button, then confirm. */
+function endTour(root: HTMLElement): void {
+  (query(root, "viewing-end-tour") as HTMLButtonElement).click();
+  (query(root, "viewing-end-tour-confirm") as HTMLButtonElement).click();
+}
+
 function query(root: HTMLElement, testId: string): HTMLElement | null {
   return root.querySelector<HTMLElement>(`[data-testid="${testId}"]`);
 }
@@ -584,7 +590,7 @@ describe("Viewing mode screen flow", () => {
     expect(preview.domElement.parentElement).not.toBeNull();
 
     // Ending the preview tears the session down and returns to the entry.
-    (query(root, "viewing-end-tour") as HTMLButtonElement).click();
+    endTour(root);
     await vi.waitFor(() => {
       expect(query(root, "viewing-entry")).not.toBeNull();
     });
@@ -836,7 +842,7 @@ describe("Viewing mode screen flow", () => {
       expect(query(root, "viewing-hud")).not.toBeNull();
     });
 
-    (query(root, "viewing-end-tour") as HTMLButtonElement).click();
+    endTour(root);
     await vi.waitFor(() => {
       expect(query(root, "viewing-entry")).not.toBeNull();
     });
@@ -1027,7 +1033,7 @@ describe("Start-distance gate on the entry screen", () => {
       expect(query(root, "viewing-end-tour")).not.toBeNull();
     });
 
-    (query(root, "viewing-end-tour") as HTMLButtonElement).click();
+    endTour(root);
 
     await vi.waitFor(() => {
       expect(locate.calls).toHaveBeenCalledTimes(2);

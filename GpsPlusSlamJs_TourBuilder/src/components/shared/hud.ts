@@ -15,6 +15,7 @@
  * component may not import from `src/app/` (dependency-cruiser).
  */
 
+import { createConfirmDialog } from "./confirm-dialog.js";
 import { HUD_ICONS } from "./hud-icons.js";
 import {
   autopilotLabel,
@@ -131,9 +132,16 @@ export function mountHud(container: HTMLElement, options: HudOptions): Hud {
     variant: "danger",
   }).element;
   endTour.dataset.testid = "viewing-end-tour";
-  if (options.onEndTour) {
-    endTour.addEventListener("click", () => options.onEndTour?.());
-  }
+  const endDialog = options.onEndTour
+    ? createConfirmDialog({
+        testid: "viewing-end-tour",
+        title: "End tour?",
+        confirmLabel: "End",
+        cancelLabel: "Cancel",
+        onConfirm: () => options.onEndTour?.(),
+      })
+    : undefined;
+  endTour.addEventListener("click", () => endDialog?.open(endTour));
 
   const autopilot = iconToggle(
     "viewing-autopilot",
@@ -257,6 +265,7 @@ export function mountHud(container: HTMLElement, options: HudOptions): Hud {
   (autopilotHint ?? wayfindingHint).show();
 
   element.append(status, notice, controls);
+  if (endDialog) element.append(endDialog.element);
   container.appendChild(element);
 
   return {
@@ -307,6 +316,7 @@ export function mountHud(container: HTMLElement, options: HudOptions): Hud {
       // Wayfinding first: dismissing Auto-walk would otherwise release it.
       wayfindingHint.dismiss();
       autopilotHint?.dismiss();
+      endDialog?.destroy();
       element.remove();
     },
   };
