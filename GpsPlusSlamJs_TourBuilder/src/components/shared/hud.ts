@@ -107,8 +107,7 @@ function iconToggle(testid: string, icon: string, label: string): Toggle {
   };
 }
 
-const BUILDINGS_FAILED_NOTICE =
-  "Buildings couldn't load. Tap the buildings button to retry.";
+const BUILDINGS_FAILED_NOTICE = "Buildings couldn't load. Tap the buildings button to retry.";
 
 export function mountHud(container: HTMLElement, options: HudOptions): Hud {
   const element = document.createElement("div");
@@ -130,11 +129,7 @@ export function mountHud(container: HTMLElement, options: HudOptions): Hud {
   const controls = document.createElement("div");
   controls.className = "ar-hud-controls";
 
-  const mapToggle = iconToggle(
-    "viewing-map-toggle",
-    HUD_ICONS.map,
-    mapLabel(false),
-  );
+  const mapToggle = iconToggle("viewing-map-toggle", HUD_ICONS.map, mapLabel(false));
   if (options.onToggleMap) {
     mapToggle.element.addEventListener("click", () => options.onToggleMap?.());
   }
@@ -156,20 +151,10 @@ export function mountHud(container: HTMLElement, options: HudOptions): Hud {
     : undefined;
   endTour.addEventListener("click", () => endDialog?.open(endTour));
 
-  const autopilot = iconToggle(
-    "viewing-autopilot",
-    HUD_ICONS.walk,
-    autopilotLabel(false),
-  );
+  const autopilot = iconToggle("viewing-autopilot", HUD_ICONS.walk, autopilotLabel(false));
 
-  const wayfinding = iconToggle(
-    "viewing-wayfinding",
-    HUD_ICONS.wayfinding,
-    wayfindingLabel(false),
-  );
-  wayfinding.element.addEventListener("click", () =>
-    options.onToggleWayfinding(),
-  );
+  const wayfinding = iconToggle("viewing-wayfinding", HUD_ICONS.wayfinding, wayfindingLabel(false));
+  wayfinding.element.addEventListener("click", () => options.onToggleWayfinding());
 
   /**
    * A one-time callout above a toggle button rather than turning the
@@ -213,18 +198,24 @@ export function mountHud(container: HTMLElement, options: HudOptions): Hud {
     let phase: "queued" | "shown" | "gone" = "queued";
     let timer: ReturnType<typeof setTimeout> | undefined;
 
+    const refit = (): void => keepOnScreen(hint, hintArrow);
+
     const dismiss = (): void => {
       if (phase === "gone") return;
       phase = "gone";
       hint.hidden = true;
       clearTimeout(timer);
+      window.removeEventListener("resize", refit);
       onGone?.();
     };
     const show = (): void => {
       if (phase !== "queued") return;
       phase = "shown";
       hint.hidden = false;
-      keepOnScreen(hint, hintArrow);
+      refit();
+      // Rotating the phone changes how much
+      // room the bubble has to its left.
+      window.addEventListener("resize", refit);
       timer = setTimeout(dismiss, timeoutMs);
     };
     hintClose.addEventListener("click", dismiss);
@@ -257,29 +248,22 @@ export function mountHud(container: HTMLElement, options: HudOptions): Hud {
     : undefined;
 
   if (options.onToggleOsmBuildings) {
-    osmBuildingsToggle.element.addEventListener("click", () =>
-      options.onToggleOsmBuildings?.(),
-    );
+    osmBuildingsToggle.element.addEventListener("click", () => options.onToggleOsmBuildings?.());
     controls.appendChild(osmBuildingsToggle.element);
   }
   if (autopilotHint) {
-    autopilot.element.addEventListener("click", () =>
-      options.onToggleAutopilot?.(),
-    );
+    autopilot.element.addEventListener("click", () => options.onToggleAutopilot?.());
     controls.appendChild(autopilotHint.wrap);
   }
   controls.appendChild(wayfindingHint.wrap);
   if (options.onToggleMap) controls.appendChild(mapToggle.element);
   if (options.onEndTour) controls.appendChild(endTour);
 
-  // Only one bubble is on screen at a time, so bubble width no longer
-  // constrains control order. Auto-walk goes first; with no Auto-walk button
-  // (the phone AR session) Wayfinding has nothing to queue behind.
-  (autopilotHint ?? wayfindingHint).show();
-
   element.append(status, notice, controls);
   if (endDialog) element.append(endDialog.element);
   container.appendChild(element);
+
+  (autopilotHint ?? wayfindingHint).show();
 
   return {
     setStatus(message) {
@@ -302,8 +286,7 @@ export function mountHud(container: HTMLElement, options: HudOptions): Hud {
     },
     setOsmBuildingsStatus(buildingStatus) {
       if (!options.onToggleOsmBuildings) return;
-      const { label, pressed, busy, error } =
-        buildingsAppearance(buildingStatus);
+      const { label, pressed, busy, error } = buildingsAppearance(buildingStatus);
       osmBuildingsToggle.set(label, pressed, { busy, error });
       // The red ring alone is not readable at a glance outdoors, so the
       // transition INTO failed also raises a notice. Leaving failed clears it,
@@ -311,10 +294,7 @@ export function mountHud(container: HTMLElement, options: HudOptions): Hud {
       if (buildingStatus === "failed" && lastBuildingsStatus !== "failed") {
         notice.textContent = BUILDINGS_FAILED_NOTICE;
         notice.hidden = false;
-      } else if (
-        buildingStatus !== "failed" &&
-        notice.textContent === BUILDINGS_FAILED_NOTICE
-      ) {
+      } else if (buildingStatus !== "failed" && notice.textContent === BUILDINGS_FAILED_NOTICE) {
         notice.hidden = true;
       }
       lastBuildingsStatus = buildingStatus;

@@ -97,6 +97,10 @@ next to `icon-button.css`.
 - **Hints show one at a time.** Auto-walk's hint shows on mount; Wayfinding's
   waits until it is closed, times out (8s) or the button is used. With no
   Auto-walk button, Wayfinding's shows on mount. Both are one-time.
+- **Hints stay on screen.** A bubble is right-anchored to its button; if that
+  would push it past the viewport's left edge it slides right (arrow shifts
+  the other way to keep pointing at the button). Measured only after the HUD
+  is attached, and re-measured on `resize` while the bubble is showing.
 - **End tour asks first.** The button opens a `confirm-dialog`; only "End"
   calls `onEndTour`.
 

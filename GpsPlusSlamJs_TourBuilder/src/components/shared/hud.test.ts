@@ -3,7 +3,7 @@
  *
  * @vitest-environment jsdom
  */
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { mountHud } from "./hud.js";
 
@@ -64,8 +64,7 @@ describe("mountHud", () => {
   });
 
   describe("End tour confirm", () => {
-    const endDialog = () =>
-      query(container, "viewing-end-tour-dialog") as HTMLDialogElement;
+    const endDialog = () => query(container, "viewing-end-tour-dialog") as HTMLDialogElement;
 
     it("clicking End tour opens the dialog and does NOT end the tour", () => {
       const { onEndTour } = setup();
@@ -75,9 +74,7 @@ describe("mountHud", () => {
 
       expect(endDialog().open).toBe(true);
       expect(onEndTour).not.toHaveBeenCalled();
-      expect(document.activeElement).toBe(
-        query(container, "viewing-end-tour-cancel"),
-      );
+      expect(document.activeElement).toBe(query(container, "viewing-end-tour-cancel"));
     });
 
     it("Cancel closes without ending", () => {
@@ -212,6 +209,58 @@ describe("mountHud", () => {
       expect(wayfindingHint().hidden).toBe(true);
     });
 
+    describe("stays inside the viewport", () => {
+      // jsdom has no layout, so fake one
+      let overhang: number;
+      const realRect = HTMLElement.prototype.getBoundingClientRect;
+
+      beforeEach(() => {
+        overhang = 20;
+        vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
+          this: HTMLElement,
+        ) {
+          if (!this.classList.contains("hud-hint") || !this.isConnected) {
+            return realRect.call(this);
+          }
+          return { left: -overhang } as DOMRect;
+        });
+      });
+
+      afterEach(() => {
+        vi.restoreAllMocks();
+      });
+
+      it("slides a left-overhanging bubble right by overhang + margin, measured after attach", () => {
+        setup(false);
+        expect(wayfindingHint().style.right).toBe("-28px");
+      });
+
+      it("moves the arrow the opposite way so it still points at the button", () => {
+        setup(false);
+        const arrow = wayfindingHint().querySelector<HTMLElement>(".hud-hint-arrow")!;
+        expect(arrow.style.right).toBe("calc(var(--hint-arrow-right) + 28px)");
+      });
+
+      it("re-fits the bubble when the viewport is resized while it is showing", () => {
+        setup(false);
+        overhang = -50; // wide viewport now: bubble fits with room to spare
+        window.dispatchEvent(new Event("resize"));
+        expect(wayfindingHint().style.right).toBe("");
+        overhang = 40; // rotated back to a narrow one
+        window.dispatchEvent(new Event("resize"));
+        expect(wayfindingHint().style.right).toBe("-48px");
+      });
+
+      it("stops listening for resizes once dismissed", () => {
+        setup(false);
+        close(wayfindingHint());
+        const before = wayfindingHint().style.right;
+        overhang = 90;
+        window.dispatchEvent(new Event("resize"));
+        expect(wayfindingHint().style.right).toBe(before);
+      });
+    });
+
     it("dismissAutopilotHint() is a harmless no-op when there is no autopilot toggle", () => {
       const { hud } = setup(false);
       expect(() => hud.dismissAutopilotHint()).not.toThrow();
@@ -305,9 +354,7 @@ describe("mountHud", () => {
     expect(button.getAttribute("aria-pressed")).toBe("false");
 
     hud.setOsmBuildingsStatus("failed");
-    expect(button.getAttribute("aria-label")).toBe(
-      "Buildings failed — tap to retry",
-    );
+    expect(button.getAttribute("aria-label")).toBe("Buildings failed — tap to retry");
 
     const { hud: hudNoToggle } = setup(true, { withOsmBuildings: false });
     expect(() => hudNoToggle.setOsmBuildingsStatus("failed")).not.toThrow();
@@ -341,17 +388,13 @@ describe("mountHud", () => {
 
     it("the hint's × close button is not an icon button", () => {
       setup();
-      const close = query(container, "viewing-autopilot-hint")!.querySelector(
-        ".hud-hint-close",
-      )!;
+      const close = query(container, "viewing-autopilot-hint")!.querySelector(".hud-hint-close")!;
       expect(close.classList.contains("icon-btn")).toBe(false);
     });
 
     it("the hint's close glyph is a plain × like the map popup's", () => {
       setup();
-      const close = query(container, "viewing-autopilot-hint")!.querySelector(
-        ".hud-hint-close",
-      )!;
+      const close = query(container, "viewing-autopilot-hint")!.querySelector(".hud-hint-close")!;
       expect(close.textContent).toBe("\u00d7");
     });
 
