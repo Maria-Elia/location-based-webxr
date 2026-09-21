@@ -20,11 +20,21 @@ misbehaves.
 
 ### `trail-window.ts` — which breadcrumb points get an orb
 
-`selectTrailWindow(points, userPos, { maxOrbs, radiusM })` returns the nearest
-indices within the radius, by horizontal X/Z distance (contract D17), capped at
-the pool size and returned in ascending order so the result is stable frame to
-frame. No trail order and no direction — accepted consequence: on a route that
-doubles back, orbs from both passes show at once.
+`selectTrailWindow(points, userPos, { maxOrbs, radiusM, minSeparationM? })`
+returns the nearest indices within the radius, by horizontal X/Z distance
+(contract D17), capped at the pool size and returned in ascending order so the
+result is stable frame to frame. No trail order and no direction — accepted
+consequence: on a route that doubles back, orbs from both passes show at once.
+
+`minSeparationM` (the app passes `TRAIL_ORB_MIN_SEPARATION_M`, 1 m) stops orbs
+from stacking: the orb glow is additive, so overlapping orbs sum to a different
+colour. Candidates are thinned in index order — a point is dropped only when
+closer than `minSeparationM` to a point already _kept_ — before the cap, so a
+retraced stretch shows once and a dense stretch thins to one orb per
+`minSeparationM` rather than collapsing to one. The lowest index of a cluster
+survives regardless of where the user stands, so it cannot flip as they walk.
+Display-only: the tour's breadcrumb data and progress logic still see every
+point.
 
 `assignOrbSlots(prev, selected, poolSize)` maps those indices onto pool slots,
 keeping an orb that is still selected in the slot it already occupies. That is
