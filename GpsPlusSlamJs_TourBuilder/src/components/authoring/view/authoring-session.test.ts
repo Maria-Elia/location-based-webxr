@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
+import type { FixInfo } from "../core/breadcrumb-gate.js";
 import type { PositionSource } from "./gps-position-source.js";
 import { createFilesAssetProvider } from "./files-asset-provider.js";
 import { createAuthoringSession } from "./authoring-session.js";
@@ -30,10 +31,10 @@ function emptyDraft(): AuthoringSliceState {
 
 function fakePositionSource(): {
   source: PositionSource;
-  deliver: (pos: TourCoord) => void;
+  deliver: (pos: TourCoord, fix?: FixInfo) => void;
   unsubscribe: ReturnType<typeof vi.fn>;
 } {
-  let onPosition: ((pos: TourCoord) => void) | undefined;
+  let onPosition: ((pos: TourCoord, fix?: FixInfo) => void) | undefined;
   const unsubscribe = vi.fn();
   const source: PositionSource = {
     subscribe(cb) {
@@ -43,9 +44,26 @@ function fakePositionSource(): {
   };
   return {
     source,
-    deliver: (pos) => onPosition?.(pos),
+    deliver: (pos, fix) => onPosition?.(pos, fix),
     unsubscribe,
   };
+}
+
+/** ~111 m north of POS_A: far past any believable single step. */
+const POS_FAR: TourCoord = { lat: 50.7763, lon: 6.0839 };
+/** ~5.5 m north of POS_FAR: an ordinary step once you are standing there. */
+const POS_FAR_NEXT: TourCoord = { lat: 50.77635, lon: 6.0839 };
+
+function breadcrumbsIn(actions: readonly unknown[]): unknown[] {
+  return actions
+    .filter(
+      (a): a is { type: string; payload: unknown } =>
+        typeof a === "object" &&
+        a !== null &&
+        "type" in a &&
+        a.type === "authoring/addBreadcrumbPoint",
+    )
+    .map((a) => a.payload);
 }
 
 function harness(draft: AuthoringSliceState = emptyDraft()) {
@@ -155,6 +173,44 @@ describe("createAuthoringSession", () => {
       type: "authoring/addBreadcrumbPoint",
       payload: POS_B,
     });
+  });
+
+  it("does not record a breadcrumb for a fix that reports poor accuracy", () => {
+    const { deliver, actions } = harness();
+    deliver(POS_A, { accuracy: 500 });
+
+    expect(breadcrumbsIn(actions)).toEqual([]);
+  });
+
+  it("does not record a jump whose timestamps imply an impossible speed", () => {
+    const { deliver, actions } = harness();
+    deliver(POS_A, { accuracy: 5, timestamp: 0 });
+    deliver(POS_B, { accuracy: 5, timestamp: 1_000 }); // ~11 m in 1 s
+
+    expect(breadcrumbsIn(actions)).toEqual([POS_A]);
+  });
+
+  it("does not record a far jump, but does once a waypoint is dropped at the live position", () => {
+    const { session, deliver, actions } = harness();
+    deliver(POS_A);
+    deliver(POS_FAR); // rejected: ~111 m from the last recorded point
+    expect(breadcrumbsIn(actions)).toEqual([POS_A]);
+
+    session.dropWaypoint(); // author is standing at POS_FAR: trust it again
+    deliver(POS_FAR_NEXT);
+
+    expect(breadcrumbsIn(actions)).toEqual([POS_A, POS_FAR_NEXT]);
+  });
+
+  it("a waypoint placed by map click says nothing about where the author is, so it does not re-anchor", () => {
+    const { session, deliver, actions } = harness();
+    deliver(POS_A);
+    deliver(POS_FAR);
+
+    session.dropWaypoint(POS_FAR);
+    deliver(POS_FAR_NEXT);
+
+    expect(breadcrumbsIn(actions)).toEqual([POS_A]);
   });
 
   it("attachAsset registers the file before dispatching attachAsset", () => {

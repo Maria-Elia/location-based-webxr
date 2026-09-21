@@ -17,7 +17,7 @@ import {
 import type { AuthoringStateShape } from "../../../store/selectors.js";
 import { buildValidatedExport } from "../core/export-tour.js";
 import { buildAssetEntry, type AssetSlot } from "../core/asset-attachment.js";
-import { shouldSampleBreadcrumbPoint } from "../core/breadcrumb-sampler.js";
+import { createBreadcrumbGate, type FixInfo } from "../core/breadcrumb-gate.js";
 import { nextId } from "../core/id.js";
 import type { PositionSource } from "./gps-position-source.js";
 import type { FilesAssetProviderHandle } from "./files-asset-provider.js";
@@ -51,16 +51,17 @@ export function createAuthoringSession(
 ): AuthoringSession {
   let destroyed = false;
   let current: TourCoord | null = null;
-  let lastBreadcrumb: TourCoord | null = null;
+  let currentFix: FixInfo | undefined;
+  const gate = createBreadcrumbGate();
   const assetFiles = new Map<AssetId, File>();
 
   const state = (): AuthoringSliceState => deps.getState().authoring;
 
-  const unsubscribe = deps.positionSource.subscribe((pos) => {
+  const unsubscribe = deps.positionSource.subscribe((pos, fix) => {
     if (destroyed) return;
     current = pos;
-    if (shouldSampleBreadcrumbPoint(lastBreadcrumb, pos)) {
-      lastBreadcrumb = pos;
+    currentFix = fix;
+    if (gate.consider(pos, fix)) {
       deps.dispatch(addBreadcrumbPoint(pos));
     }
   });
@@ -74,6 +75,9 @@ export function createAuthoringSession(
         state().waypoints.map((w) => w.id),
       );
       deps.dispatch(addWaypoint({ id, position: pos }));
+      // Only a waypoint dropped at the live fix says where the author stands
+      // (a map click or drag can be anywhere), so only it re-anchors the trail.
+      if (position === undefined) gate.reanchor(pos, currentFix);
       return id;
     },
 

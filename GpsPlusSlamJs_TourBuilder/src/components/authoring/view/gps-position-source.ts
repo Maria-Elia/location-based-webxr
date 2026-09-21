@@ -16,10 +16,12 @@ import {
 } from "gps-plus-slam-app-framework/sensors";
 
 import type { TourCoord } from "../../../store/types.js";
+import type { FixInfo } from "../core/breadcrumb-gate.js";
 
 export interface PositionSource {
-  /** Fires on every fix; returns an unsubscribe function. */
-  subscribe(onPosition: (pos: TourCoord) => void): () => void;
+  /** Fires on every fix; returns an unsubscribe function. `fix` carries what
+   *  the source knows about the fix's quality; a replay source may omit it. */
+  subscribe(onPosition: (pos: TourCoord, fix?: FixInfo) => void): () => void;
 }
 
 export interface LiveGpsPositionSourceDeps {
@@ -44,7 +46,12 @@ export function createLiveGpsPositionSource(
 ): PositionSource {
   return {
     subscribe(onPosition) {
-      deps.startGpsWatch((position) => onPosition(toTourCoord(position)));
+      deps.startGpsWatch((position) =>
+        onPosition(toTourCoord(position), {
+          accuracy: position.accuracy,
+          timestamp: position.timestamp,
+        }),
+      );
       return () => deps.stopGpsWatch();
     },
   };

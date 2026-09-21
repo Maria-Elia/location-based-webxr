@@ -59,6 +59,23 @@ describe("createLiveGpsPositionSource", () => {
     expect(received).toEqual([{ lat: 50.7753, lon: 6.0839 }]);
   });
 
+  it("passes the fix's accuracy and timestamp along as a second argument", () => {
+    const startGpsWatch = vi.fn();
+    const source = createLiveGpsPositionSource({
+      startGpsWatch,
+      stopGpsWatch: vi.fn(),
+    });
+
+    const fixes: unknown[] = [];
+    source.subscribe((_pos, fix) => fixes.push(fix));
+    const onPosition = startGpsWatch.mock.calls[0]?.[0] as (
+      p: GpsPosition,
+    ) => void;
+    onPosition(gpsPosition({ accuracy: 42, timestamp: 1234 }));
+
+    expect(fixes).toEqual([{ accuracy: 42, timestamp: 1234 }]);
+  });
+
   it("the unsubscribe function calls the injected stopGpsWatch", () => {
     const stopGpsWatch = vi.fn();
     const source = createLiveGpsPositionSource({
