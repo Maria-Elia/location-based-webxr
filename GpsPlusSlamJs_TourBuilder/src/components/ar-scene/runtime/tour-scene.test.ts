@@ -468,6 +468,23 @@ describe("the breadcrumb trail", () => {
     expect(h.adapter.orbCount).toBe(2); // the far point is outside the 15 m window
   });
 
+  it("draws one orb for breadcrumbs stacked on the same spot, so their glow cannot sum to another colour", () => {
+    const h = setup({
+      tour: {
+        ...TOUR,
+        // z = 0, 0.2 (20 cm apart: overlapping orbs) and 5.
+        breadcrumb: [
+          { lat: 0, lon: 0 },
+          { lat: 0, lon: 0.2 },
+          { lat: 0, lon: 5 },
+        ],
+      },
+    });
+    h.adapter.setUserPosition(new Vector3(0, 0, 0));
+    h.scene.tick(1);
+    expect(h.adapter.orbCount).toBe(2);
+  });
+
   it("guides toward the nearest unvisited breadcrumb and marks it visited on arrival", () => {
     const h = setup();
     h.scene.setWayfindingEnabled(true);

@@ -11,7 +11,8 @@
  * within a radius**, by horizontal X/Z distance (contract D17, the same metric
  * the proximity machine uses). No trail order, no direction, no dependency on
  * the next unvisited waypoint. Accepted consequence: where a route loops back on
- * itself, orbs from both passes can show at once.
+ * itself, orbs from both passes can show at once — unless they sit on top of
+ * each other, see `minSeparationM`.
  *
  * Slot assignment exists purely to avoid churn — an orb already sitting on a
  * still-selected point keeps its slot, so a frame typically re-points one orb
@@ -31,6 +32,41 @@ export interface TrailWindowConfig {
   readonly maxOrbs: number;
   /** Only points within this horizontal distance are candidates. */
   readonly radiusM: number;
+  /**
+   * Two orbs closer than this would overlap, and the additive glow then sums
+   * to a different colour. Candidates are thinned in index order: a point is
+   * dropped when it is closer than this to a point already *kept* (never to a
+   * dropped one, so a dense stretch thins to one orb per `minSeparationM`
+   * instead of collapsing to a single orb). Display-only — the tour's
+   * breadcrumb data and progress logic still see every point. Omitted or 0
+   * disables it.
+   */
+  readonly minSeparationM?: number | undefined;
+}
+
+interface Candidate {
+  readonly index: number;
+  readonly point: HorizontalPoint;
+  readonly distSq: number;
+}
+
+/** Keeps the lowest index of each cluster: the survivor never depends on where
+ *  the user stands, so it cannot flip (and re-point an orb) as they walk. */
+function thinOverlapping(
+  candidates: readonly Candidate[],
+  minSeparationM: number,
+): readonly Candidate[] {
+  const minSq = minSeparationM * minSeparationM;
+  const kept: Candidate[] = [];
+  for (const c of candidates) {
+    const overlaps = kept.some((k) => {
+      const dx = k.point.x - c.point.x;
+      const dz = k.point.z - c.point.z;
+      return dx * dx + dz * dz < minSq;
+    });
+    if (!overlaps) kept.push(c);
+  }
+  return kept;
 }
 
 /**
@@ -49,7 +85,7 @@ export function selectTrailWindow(
   if (userPos === null || config.maxOrbs <= 0) return [];
 
   const radiusSq = config.radiusM * config.radiusM;
-  const candidates: { index: number; distSq: number }[] = [];
+  const inRadius: Candidate[] = [];
 
   for (let i = 0; i < points.length; i++) {
     const p = points[i];
@@ -57,8 +93,14 @@ export function selectTrailWindow(
     const dx = p.x - userPos.x;
     const dz = p.z - userPos.z;
     const distSq = dx * dx + dz * dz;
-    if (distSq <= radiusSq) candidates.push({ index: i, distSq });
+    if (distSq <= radiusSq) inRadius.push({ index: i, point: p, distSq });
   }
+
+  // Thin overlaps before the cap so stacked points do not use up the pool.
+  const candidates =
+    (config.minSeparationM ?? 0) > 0
+      ? [...thinOverlapping(inRadius, config.minSeparationM ?? 0)]
+      : inRadius;
 
   // Nearest first, then cap, then restore index order for a stable result. Ties
   // break on index so the choice is deterministic on a doubled-back route.

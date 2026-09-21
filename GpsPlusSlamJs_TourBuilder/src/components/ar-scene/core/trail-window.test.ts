@@ -63,6 +63,79 @@ describe("selectTrailWindow", () => {
   });
 });
 
+describe("selectTrailWindow — minSeparationM (overlapping orbs)", () => {
+  const USER = { x: 0, z: 0 };
+  const WIDE = { maxOrbs: 16, radiusM: 50, minSeparationM: 1 };
+
+  it("draws one orb for points stacked on the same spot, keeping the lowest index", () => {
+    const stacked = [
+      { x: 5, z: 0 },
+      { x: 5, z: 0 },
+      { x: 5, z: 0.2 },
+    ];
+    expect(selectTrailWindow(stacked, USER, WIDE)).toEqual([0]);
+  });
+
+  it("keeps every point of a normally spaced trail", () => {
+    const spaced = Array.from({ length: 10 }, (_, i) => ({ x: i * 3, z: 0 }));
+    expect(selectTrailWindow(spaced, USER, WIDE)).toEqual([
+      0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
+    ]);
+  });
+
+  it("a retraced stretch collapses to the original trail, not to a single orb", () => {
+    // 40 m out and back over the very same points, 3 m apart.
+    const out = Array.from({ length: 14 }, (_, i) => ({ x: i * 3, z: 0 }));
+    const retraced = [...out, ...[...out].reverse()];
+    const kept = selectTrailWindow(retraced, USER, WIDE);
+    expect(kept).toEqual(out.map((_, i) => i));
+  });
+
+  it("compares against points actually kept, so a chain of close points does not eat the trail", () => {
+    // 0.8 m steps: 0 kept, 0.8 dropped (< 1 m from 0), 1.6 kept (1.6 m from 0),
+    // 2.4 dropped (0.8 m from 1.6), 3.2 kept. Chaining through dropped points
+    // would delete everything after the first.
+    const chain = Array.from({ length: 5 }, (_, i) => ({ x: i * 0.8, z: 0 }));
+    expect(selectTrailWindow(chain, USER, WIDE)).toEqual([0, 2, 4]);
+  });
+
+  it("picks the survivor by index, not by distance to the user, so it cannot flip as the user walks", () => {
+    const pair = [
+      { x: 10, z: 0 },
+      { x: 10.3, z: 0 },
+    ];
+    expect(selectTrailWindow(pair, { x: 10.3, z: 0 }, WIDE)).toEqual([0]);
+    expect(selectTrailWindow(pair, { x: 0, z: 0 }, WIDE)).toEqual([0]);
+  });
+
+  it("removes duplicates before the cap, so stacked points do not use up the pool", () => {
+    const points = [
+      { x: 1, z: 0 },
+      { x: 1, z: 0 },
+      { x: 1, z: 0 },
+      { x: 4, z: 0 },
+      { x: 7, z: 0 },
+    ];
+    expect(
+      selectTrailWindow(points, USER, {
+        maxOrbs: 3,
+        radiusM: 50,
+        minSeparationM: 1,
+      }),
+    ).toEqual([0, 3, 4]);
+  });
+
+  it("does nothing when minSeparationM is omitted (existing behaviour)", () => {
+    const stacked = [
+      { x: 5, z: 0 },
+      { x: 5, z: 0 },
+    ];
+    expect(
+      selectTrailWindow(stacked, USER, { maxOrbs: 16, radiusM: 50 }),
+    ).toEqual([0, 1]);
+  });
+});
+
 describe("assignOrbSlots", () => {
   it("fills empty slots in order", () => {
     expect(assignOrbSlots([null, null, null], [7, 8], 3)).toEqual([7, 8, null]);

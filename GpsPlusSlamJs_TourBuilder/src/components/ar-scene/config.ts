@@ -30,6 +30,14 @@ export const TRAIL_ORB_POOL_SIZE = 16;
 export const TRAIL_WINDOW_RADIUS_M = 15;
 
 /**
+ * Orbs closer than this are drawn as one. Orbs are ~0.24 m across and glow
+ * additively, so overlapping ones sum to a different colour; noisy recordings
+ * (a device whose fix jumps back and forth) stack points on the same spot.
+ * Display-only: breadcrumb data and progress still see every point.
+ */
+export const TRAIL_ORB_MIN_SEPARATION_M = 1;
+
+/**
  * The wayfinding guide's own visual show/hide deadband (plan
  * 2026-09-17-breadcrumb-wayfinding, BW7) — deliberately permissive. The
  * orchestrator itself decides when a breadcrumb is "done" (arrival radius,

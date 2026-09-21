@@ -36,6 +36,7 @@ import {
   MAX_CONCURRENT_PARSES,
   MODEL_LRU_CAPACITY,
   TRAIL_ORB_POOL_SIZE,
+  TRAIL_ORB_MIN_SEPARATION_M,
   TRAIL_WINDOW_RADIUS_M,
 } from "../config.js";
 import { diffZones, type ZoneMap } from "../core/zone-commands.js";
@@ -385,6 +386,7 @@ export function createTourScene(options: TourSceneOptions): TourScene {
     const selected = selectTrailWindow(world, adapter.getUserPosition(), {
       maxOrbs: poolSize,
       radiusM: trailRadiusM,
+      minSeparationM: TRAIL_ORB_MIN_SEPARATION_M,
     });
     orbSlots = assignOrbSlots(orbSlots, selected, poolSize);
     adapter.setOrbCoords(
