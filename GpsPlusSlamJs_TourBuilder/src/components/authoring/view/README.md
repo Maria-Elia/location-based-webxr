@@ -4,7 +4,7 @@
 
 ```ts
 interface PositionSource {
-  subscribe(onPosition: (pos: TourCoord) => void): () => void;
+  subscribe(onPosition: (pos: TourCoord, fix?: FixInfo) => void): () => void;
 }
 createLiveGpsPositionSource(deps?): PositionSource
 ```
@@ -14,7 +14,9 @@ watch directly. `startGpsWatch`/`stopGpsWatch` is the framework's only
 "current position" primitive — no Redux selector exists for it, only a
 history of past fixes. The demo's replay mode and every test supply their
 own trivial `PositionSource` instead (plan AU6), so the orchestrator below
-never knows or cares whether a fix is live or replayed.
+never knows or cares whether a fix is live or replayed. The live source passes
+each fix's `accuracy` and `timestamp` as the optional second argument
+(`FixInfo`, from `core/breadcrumb-gate.ts`); a replay source may omit it.
 
 ## `files-asset-provider.ts`
 
@@ -42,7 +44,10 @@ createAuthoringSession(deps: AuthoringSessionDeps): AuthoringSession
 
 The orchestrator: subscribes to the injected `PositionSource` once, tracks
 the latest fix for `dropWaypoint()`, and runs every fix through
-`shouldSampleBreadcrumbPoint` against the last _dispatched_ breadcrumb point.
+`createBreadcrumbGate` (accuracy, implied speed, minimum spacing from the last
+_dispatched_ breadcrumb point). `dropWaypoint()` with no argument — a waypoint at
+the live fix — also re-anchors the gate there; `dropWaypoint(position)` (map
+click / drag) does not, since it says nothing about where the author stands.
 `attachAsset` registers the file with the asset-provider handle **before**
 dispatching, so a listener reacting to the dispatched action can already
 resolve it. `destroy()` unsubscribes and self-guards against any fix that
