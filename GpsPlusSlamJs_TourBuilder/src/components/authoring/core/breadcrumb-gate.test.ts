@@ -5,6 +5,7 @@ import {
   MAX_JUMP_WITHOUT_TIMESTAMP_M,
   MAX_WALK_SPEED_MPS,
   REANCHOR_FIX_COUNT,
+  REANCHOR_RADIUS_M,
   createBreadcrumbGate,
 } from "./breadcrumb-gate.js";
 
@@ -166,6 +167,26 @@ describe("createBreadcrumbGate — self-healing without a waypoint", () => {
     gate.consider(far(2));
 
     expect(gate.consider(far(10))).toBe(true);
+  });
+
+  it(`heals when the rejected fixes spread up to REANCHOR_RADIUS_M apart`, () => {
+    const gate = createBreadcrumbGate();
+    gate.consider(ORIGIN);
+    const edge = REANCHOR_RADIUS_M - 0.5; // clear of the boundary, not on it
+
+    expect(gate.consider(far(0))).toBe(false);
+    expect(gate.consider(far(edge / 2))).toBe(false);
+    expect(gate.consider(far(edge))).toBe(true);
+  });
+
+  it(`does not heal once the rejected fixes spread past REANCHOR_RADIUS_M`, () => {
+    const gate = createBreadcrumbGate();
+    gate.consider(ORIGIN);
+    const beyond = REANCHOR_RADIUS_M + 5; // clear of the boundary, not on it
+
+    expect(gate.consider(far(0))).toBe(false);
+    expect(gate.consider(far(beyond / 2))).toBe(false);
+    expect(gate.consider(far(beyond))).toBe(false);
   });
 
   it("never heals on A -> B -> A -> B jitter: the rejected fixes do not agree", () => {
