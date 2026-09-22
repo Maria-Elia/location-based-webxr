@@ -641,6 +641,49 @@ p[data-testid="qr-status"] {
   transition: border-color var(--duration-base) var(--ease-out);
 }
 
+/* Save-as-image row below the QR — hidden (not just empty) until a code
+   exists, same collapse-then-reveal shape as `.qr-host`/`.qr-host-show` so
+   the two appear together instead of the row flashing in a beat early. */
+.qr-actions {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-2);
+  height: 0;
+  margin: 0 auto;
+  opacity: 0;
+  overflow: hidden;
+  transition:
+    opacity var(--duration-base) var(--ease-out),
+    height var(--duration-base) var(--ease-out),
+    margin var(--duration-base) var(--ease-out);
+}
+
+.qr-actions-show {
+  height: 44px;
+  margin-top: var(--space-3);
+  opacity: 1;
+  flex-wrap: wrap;
+}
+
+/* Compact secondary action, not `.primary` — saving an image is optional
+   next to the share link itself. `flex: 1 1 0` so PNG/JPG split the row
+   evenly and stay full-height tap targets even on a 320px phone. */
+.qr-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  flex: 1 1 0;
+  max-width: 140px;
+  font-size: var(--text-fluid-sm);
+  color: var(--text-muted);
+}
+
+.qr-action-icon {
+  display: inline-flex;
+  color: var(--accent);
+}
+
 /* ── Viewing mode ─────────────────────────────────────────────────────── */
 
 /* The element handed to `initAR`, i.e. the WebXR DOM-Overlay root. Every
