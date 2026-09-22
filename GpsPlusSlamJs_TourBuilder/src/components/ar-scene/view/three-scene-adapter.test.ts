@@ -385,7 +385,11 @@ describe("wayfinding guide (plan 2026-09-17)", () => {
 
     expect(findIndicator()).toBeUndefined();
 
-    h.adapter.setWayfindingTarget({ index: 0, coord: COORD });
+    h.adapter.setWayfindingTarget({
+      kind: "breadcrumb",
+      index: 0,
+      coord: COORD,
+    });
     h.adapter.update(1 / 60);
     expect(findIndicator()).toBeDefined();
 

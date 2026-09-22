@@ -44,15 +44,30 @@ export function advanceBreadcrumbProgress(
   visited: ReadonlySet<number>,
   userPos: HorizontalPoint | null,
   arrivalRadiusM: number,
-): { next: number | null; newlyVisited: number | null } {
-  if (userPos === null) return { next: null, newlyVisited: null };
+): {
+  next: number | null;
+  newlyVisited: number | null;
+  /** Horizontal dist² (m²) from `userPos` to `next`, or `null` alongside a
+   *  `null` `next` — lets a caller decide when `next` is "too far" to trust
+   *  (e.g. falling back to a waypoint target) without recomputing it. */
+  nextDistSq: number | null;
+} {
+  if (userPos === null) {
+    return { next: null, newlyVisited: null, nextDistSq: null };
+  }
 
   const nearest = nearestUnvisited(points, (i) => visited.has(i), userPos);
-  if (nearest === null) return { next: null, newlyVisited: null };
+  if (nearest === null) {
+    return { next: null, newlyVisited: null, nextDistSq: null };
+  }
 
   const arrivalRadiusSq = arrivalRadiusM * arrivalRadiusM;
   if (nearest.distSq > arrivalRadiusSq) {
-    return { next: nearest.index, newlyVisited: null };
+    return {
+      next: nearest.index,
+      newlyVisited: null,
+      nextDistSq: nearest.distSq,
+    };
   }
 
   const following = nearestUnvisited(
@@ -63,5 +78,6 @@ export function advanceBreadcrumbProgress(
   return {
     next: following === null ? null : following.index,
     newlyVisited: nearest.index,
+    nextDistSq: following === null ? null : following.distSq,
   };
 }

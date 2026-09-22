@@ -61,6 +61,15 @@ export const BREADCRUMB_GUIDE_DISTANCE_MAX_M = 50;
 export const BREADCRUMB_ARRIVAL_RADIUS_M = 5;
 
 /**
+ * When the nearest unvisited breadcrumb is farther than this (or none is
+ * left), the recorded trail is no longer a useful guide — the wayfinding
+ * target falls back to the next unvisited waypoint (tour order, D8) instead.
+ * Deliberately well past `BREADCRUMB_ARRIVAL_RADIUS_M`: this is "trail lost",
+ * not "arrived".
+ */
+export const BREADCRUMB_GIVE_UP_RADIUS_M = 50;
+
+/**
  * Assumed visual footprint, in metres (A14, revised) — matches the sprite
  * template's own "knight-sized banner" default (`SPRITE_WIDTH_M`/`_HEIGHT_M`
  * in `gltf-loading.ts`). A GLTF model's real bounds aren't known until it's

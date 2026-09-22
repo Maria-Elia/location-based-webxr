@@ -26,12 +26,18 @@ import {
 } from "gps-plus-slam-app-framework/visualization/proximity-driver";
 import type { ProximityObject } from "gps-plus-slam-app-framework/visualization/proximity-machine";
 import {
+  selectNextUnvisitedWaypoint,
   selectTour,
   type ViewingStateShape,
 } from "../../../store/selectors.js";
 import { initZones, setWaypointZone } from "../../../store/zones-slice.js";
 import { markWaypointVisited } from "../../../store/tour-progress-slice.js";
-import type { AssetProvider, Tour, TourCoord } from "../../../store/types.js";
+import type {
+  AssetProvider,
+  Tour,
+  TourCoord,
+  Waypoint,
+} from "../../../store/types.js";
 import {
   MAX_CONCURRENT_PARSES,
   MODEL_LRU_CAPACITY,
@@ -45,7 +51,10 @@ import { createParseQueue, type ParseQueue } from "../core/parse-queue.js";
 import { assignOrbSlots, selectTrailWindow } from "../core/trail-window.js";
 import { advanceBreadcrumbProgress } from "../core/breadcrumb-progress.js";
 import { markBreadcrumbVisited } from "../../../store/breadcrumb-progress-slice.js";
-import { BREADCRUMB_ARRIVAL_RADIUS_M } from "../config.js";
+import {
+  BREADCRUMB_ARRIVAL_RADIUS_M,
+  BREADCRUMB_GIVE_UP_RADIUS_M,
+} from "../config.js";
 import {
   initialStorySession,
   leaveActive,
@@ -66,6 +75,7 @@ import type {
   TapHit,
   TemplateHandle,
   WaypointHandle,
+  WayfindingTarget,
 } from "./scene-adapter.js";
 
 /** Re-window the trail four times a second — orbs are metres apart, not pixels. */
@@ -377,6 +387,33 @@ export function createTourScene(options: TourSceneOptions): TourScene {
 
   // ── Trail (plan A3/A4) ──────────────────────────────────────────────────────
 
+  const giveUpRadiusSq =
+    BREADCRUMB_GIVE_UP_RADIUS_M * BREADCRUMB_GIVE_UP_RADIUS_M;
+
+  /** A breadcrumb target only counts as trustworthy within the give-up
+   *  radius; farther than that (or none left) is the caller's cue to fall
+   *  back to the next unvisited waypoint in tour order (D8) instead. */
+  function resolveBreadcrumbTarget(
+    next: number | null,
+    nextCoord: TourCoord | null,
+    nextDistSq: number | null,
+  ): WayfindingTarget | null {
+    if (next === null || nextCoord === null || nextDistSq === null) {
+      return null;
+    }
+    if (nextDistSq > giveUpRadiusSq) return null;
+    return { kind: "breadcrumb", index: next, coord: nextCoord };
+  }
+
+  function waypointFallbackTarget(): WayfindingTarget | null {
+    const waypoint: Waypoint | null = selectNextUnvisitedWaypoint(
+      store.getState(),
+    );
+    return waypoint === null
+      ? null
+      : { kind: "waypoint", id: waypoint.id, coord: waypoint.position };
+  }
+
   function updateTrail(): void {
     if (currentTour === null) return;
     const coords: readonly TourCoord[] = currentTour.breadcrumb;
@@ -396,7 +433,7 @@ export function createTourScene(options: TourSceneOptions): TourScene {
     );
 
     const visited = new Set(store.getState().breadcrumbProgress.visitedIndices);
-    const { next, newlyVisited } = advanceBreadcrumbProgress(
+    const { next, newlyVisited, nextDistSq } = advanceBreadcrumbProgress(
       world,
       visited,
       adapter.getUserPosition(),
@@ -406,10 +443,13 @@ export function createTourScene(options: TourSceneOptions): TourScene {
       store.dispatch(markBreadcrumbVisited(newlyVisited));
     }
     const nextCoord = next === null ? null : (coords[next] ?? null);
+    const breadcrumbTarget = resolveBreadcrumbTarget(
+      next,
+      nextCoord,
+      nextDistSq,
+    );
     adapter.setWayfindingTarget(
-      !wayfindingEnabled || next === null || nextCoord === null
-        ? null
-        : { index: next, coord: nextCoord },
+      wayfindingEnabled ? (breadcrumbTarget ?? waypointFallbackTarget()) : null,
     );
 
     adapter.setActiveWaypointPositions(collectActiveWaypointPositions());

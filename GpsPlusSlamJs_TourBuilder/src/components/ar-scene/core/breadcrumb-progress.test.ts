@@ -19,12 +19,20 @@ describe("advanceBreadcrumbProgress", () => {
       null,
       RADIUS_M,
     );
-    expect(result).toEqual({ next: null, newlyVisited: null });
+    expect(result).toEqual({
+      next: null,
+      newlyVisited: null,
+      nextDistSq: null,
+    });
   });
 
   it("returns null/null for an empty points array", () => {
     const result = advanceBreadcrumbProgress([], new Set(), ORIGIN, RADIUS_M);
-    expect(result).toEqual({ next: null, newlyVisited: null });
+    expect(result).toEqual({
+      next: null,
+      newlyVisited: null,
+      nextDistSq: null,
+    });
   });
 
   it("returns null/null when every point is already visited", () => {
@@ -35,7 +43,11 @@ describe("advanceBreadcrumbProgress", () => {
       ORIGIN,
       RADIUS_M,
     );
-    expect(result).toEqual({ next: null, newlyVisited: null });
+    expect(result).toEqual({
+      next: null,
+      newlyVisited: null,
+      nextDistSq: null,
+    });
   });
 
   it("picks the nearest unvisited point when it is beyond the arrival radius", () => {
@@ -46,7 +58,7 @@ describe("advanceBreadcrumbProgress", () => {
       ORIGIN,
       RADIUS_M,
     );
-    expect(result).toEqual({ next: 1, newlyVisited: null });
+    expect(result).toEqual({ next: 1, newlyVisited: null, nextDistSq: 100 });
   });
 
   it("ignores already-visited points even when they are nearest (BW3 one-way latch)", () => {
@@ -57,7 +69,7 @@ describe("advanceBreadcrumbProgress", () => {
       ORIGIN,
       RADIUS_M,
     );
-    expect(result).toEqual({ next: 1, newlyVisited: null });
+    expect(result).toEqual({ next: 1, newlyVisited: null, nextDistSq: 400 });
   });
 
   it("marks arrival and advances to the following point in the same call (BW4)", () => {
@@ -68,7 +80,7 @@ describe("advanceBreadcrumbProgress", () => {
       ORIGIN,
       RADIUS_M,
     );
-    expect(result).toEqual({ next: 1, newlyVisited: 0 });
+    expect(result).toEqual({ next: 1, newlyVisited: 0, nextDistSq: 100 });
   });
 
   it("marks arrival with nothing left to advance to", () => {
@@ -79,7 +91,7 @@ describe("advanceBreadcrumbProgress", () => {
       ORIGIN,
       RADIUS_M,
     );
-    expect(result).toEqual({ next: null, newlyVisited: 0 });
+    expect(result).toEqual({ next: null, newlyVisited: 0, nextDistSq: null });
   });
 
   it("treats a point exactly at the arrival radius as arrived (inclusive, matches trail-window's <=)", () => {
@@ -90,7 +102,7 @@ describe("advanceBreadcrumbProgress", () => {
       ORIGIN,
       RADIUS_M,
     );
-    expect(result).toEqual({ next: 1, newlyVisited: 0 });
+    expect(result).toEqual({ next: 1, newlyVisited: 0, nextDistSq: 100 });
   });
 
   it("skips points that could not be converted to world space", () => {
@@ -101,6 +113,6 @@ describe("advanceBreadcrumbProgress", () => {
       ORIGIN,
       RADIUS_M,
     );
-    expect(result).toEqual({ next: null, newlyVisited: 1 });
+    expect(result).toEqual({ next: null, newlyVisited: 1, nextDistSq: null });
   });
 });

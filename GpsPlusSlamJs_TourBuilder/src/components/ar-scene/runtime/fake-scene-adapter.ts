@@ -17,7 +17,7 @@ import { Vector3 } from "three";
 import type { TourCoord } from "../../../store/types.js";
 import { createListenerSet } from "../core/listener-set.js";
 import type {
-  BreadcrumbTarget,
+  WayfindingTarget,
   SceneAdapter,
   TapHit,
   TemplateHandle,
@@ -50,7 +50,7 @@ export interface FakeSceneAdapter extends SceneAdapter {
   readonly visible: ReadonlySet<string>;
   readonly pickTargetIds: readonly string[];
   readonly orbCount: number;
-  readonly wayfindingTarget: BreadcrumbTarget | null;
+  readonly wayfindingTarget: WayfindingTarget | null;
   readonly activeWaypointPositions: readonly Vector3[];
   setUserPosition(position: Vector3 | null): void;
   setAnchored(waypointId: string, anchored: boolean): void;
@@ -85,7 +85,7 @@ export function createFakeSceneAdapter(
   let userPosition: Vector3 | null = null;
   let pickTargetIds: string[] = [];
   let orbCount = 0;
-  let wayfindingTarget: BreadcrumbTarget | null = null;
+  let wayfindingTarget: WayfindingTarget | null = null;
   let activeWaypointPositions: readonly Vector3[] = [];
   let nextVisualId = 0;
   let nextTemplateId = 0;
@@ -153,7 +153,7 @@ export function createFakeSceneAdapter(
     setOrbCoords(coords: readonly (TourCoord | null)[]): void {
       orbCount = coords.filter((c) => c !== null).length;
     },
-    setWayfindingTarget(target: BreadcrumbTarget | null): void {
+    setWayfindingTarget(target: WayfindingTarget | null): void {
       wayfindingTarget = target;
     },
     setActiveWaypointPositions(positions: readonly Vector3[]): void {

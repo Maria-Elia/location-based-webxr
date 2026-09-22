@@ -496,8 +496,39 @@ describe("the breadcrumb trail", () => {
 
     expect(h.store.getState().breadcrumbProgress.visitedIndices).toEqual([0]);
     expect(h.adapter.wayfindingTarget).toEqual({
+      kind: "breadcrumb",
       index: 1,
       coord: { lat: 0, lon: 5 },
+    });
+  });
+
+  it("falls back to the next unvisited waypoint once no breadcrumb is within the give-up radius", () => {
+    const h = setup();
+    h.scene.setWayfindingEnabled(true);
+    h.adapter.setUserPosition(new Vector3(0, 0, 0));
+
+    // First tick: breadcrumb 0 (dist 0) is visited; the guide advances to
+    // breadcrumb 1 (dist 5), still close enough to trust.
+    h.scene.tick(1);
+    expect(h.adapter.wayfindingTarget).toEqual({
+      kind: "breadcrumb",
+      index: 1,
+      coord: { lat: 0, lon: 5 },
+    });
+
+    // Second tick, same spot: breadcrumb 1 is now within arrival radius too
+    // and gets visited, leaving only breadcrumb 2 at 200 m — well past the
+    // 50 m give-up radius — so the guide falls back to the first unvisited
+    // waypoint (tour order, D8) instead of pointing at a hopelessly distant
+    // breadcrumb.
+    h.scene.tick(1);
+    expect(h.store.getState().breadcrumbProgress.visitedIndices).toEqual([
+      0, 1,
+    ]);
+    expect(h.adapter.wayfindingTarget).toEqual({
+      kind: "waypoint",
+      id: "wp-a",
+      coord: { lat: 1, lon: 1 },
     });
   });
 
@@ -540,6 +571,7 @@ describe("the wayfinding guide toggle", () => {
     h.scene.tick(1);
 
     expect(h.adapter.wayfindingTarget).toEqual({
+      kind: "breadcrumb",
       index: 1,
       coord: { lat: 0, lon: 5 },
     });

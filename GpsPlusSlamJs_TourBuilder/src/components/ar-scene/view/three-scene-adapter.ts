@@ -34,7 +34,7 @@ import { Vector3, type AudioListener, type PerspectiveCamera } from "three";
 import type { TourCoord } from "../../../store/types.js";
 import { computeBillboardYaw } from "../../shared/billboard-math.js";
 import type {
-  BreadcrumbTarget,
+  WayfindingTarget,
   SceneAdapter,
   TemplateHandle,
   VisualHandle,
@@ -148,7 +148,7 @@ export function createThreeSceneAdapter(
       orbs.setCoords(coords);
     },
 
-    setWayfindingTarget(target: BreadcrumbTarget | null): void {
+    setWayfindingTarget(target: WayfindingTarget | null): void {
       breadcrumbGuide.setTarget(target);
     },
 

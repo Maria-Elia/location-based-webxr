@@ -28,8 +28,16 @@ import {
 } from "gps-plus-slam-app-framework/visualization";
 
 import type { TourCoord } from "../../../store/types.js";
-import type { BreadcrumbTarget } from "../runtime/scene-adapter.js";
+import type { WayfindingTarget } from "../runtime/scene-adapter.js";
 import type { OrbAnchor } from "./breadcrumb-orbs.js";
+
+/** Fresh per-target id, distinct across kinds so a waypoint target never
+ *  reuses a breadcrumb index's hysteresis state, or vice versa. */
+function targetKey(target: WayfindingTarget): string {
+  return target.kind === "breadcrumb"
+    ? `bc-${target.index}`
+    : `wp-${target.id}`;
+}
 
 type AnchorFactory = (object3D: Object3D, coord: TourCoord) => OrbAnchor;
 
@@ -42,7 +50,7 @@ export interface BreadcrumbGuideOptions {
 }
 
 export interface BreadcrumbGuide {
-  setTarget(target: BreadcrumbTarget | null): void;
+  setTarget(target: WayfindingTarget | null): void;
   /**
    * World positions of every currently-ACTIVE waypoint. While any of them
    * is roughly in front of the camera, the indicator is suppressed — its
@@ -83,14 +91,14 @@ export function createBreadcrumbGuide(
   options.parent.add(marker);
 
   let anchor: OrbAnchor | null = null;
-  let currentIndex: number | null = null;
+  let currentKey: string | null = null;
   let currentCoord: TourCoord | null = null;
   let activeWaypointPositions: readonly Vector3[] = [];
 
   const hud: WayfindingHud = createWayfindingHud({
     camera: options.camera,
     getTargets: () => {
-      if (currentIndex === null) return [];
+      if (currentKey === null) return [];
       if (isActiveContentInView(options.camera, activeWaypointPositions)) {
         return [];
       }
@@ -101,7 +109,7 @@ export function createBreadcrumbGuide(
       marker.updateWorldMatrix(true, false);
       return [
         {
-          id: `bc-${currentIndex}`,
+          id: currentKey,
           position: marker.getWorldPosition(new Vector3()),
         },
       ];
@@ -116,16 +124,17 @@ export function createBreadcrumbGuide(
       activeWaypointPositions = positions;
     },
 
-    setTarget(target: BreadcrumbTarget | null): void {
+    setTarget(target: WayfindingTarget | null): void {
       if (target === null) {
-        currentIndex = null;
+        currentKey = null;
         currentCoord = null;
         return;
       }
-      if (currentCoord === target.coord && currentIndex === target.index) {
+      const key = targetKey(target);
+      if (currentKey === key && currentCoord === target.coord) {
         return; // already pointed here
       }
-      currentIndex = target.index;
+      currentKey = key;
       currentCoord = target.coord;
       if (anchor === null) {
         anchor = options.anchorFactory(marker, target.coord);

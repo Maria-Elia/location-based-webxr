@@ -56,17 +56,32 @@ export interface TapHit {
 }
 
 /**
- * A breadcrumb index + its coordinate to guide the visitor toward, or `null`
- * to show nothing. Carries the index (not just the coordinate) so the
- * concrete adapter can give the framework's wayfinding presenter a fresh
- * per-target id on every swap — reusing the same id across two different
- * breadcrumbs would carry over that presenter's own arrival/hysteresis
- * state from the wrong target.
+ * A breadcrumb index + its coordinate to guide the visitor toward. Carries
+ * the index (not just the coordinate) so the concrete adapter can give the
+ * framework's wayfinding presenter a fresh per-target id on every swap —
+ * reusing the same id across two different breadcrumbs would carry over
+ * that presenter's own arrival/hysteresis state from the wrong target.
  */
-export interface BreadcrumbTarget {
+interface BreadcrumbTarget {
+  readonly kind: "breadcrumb";
   readonly index: number;
   readonly coord: TourCoord;
 }
+
+/**
+ * A waypoint id + its coordinate to guide the visitor toward — the fallback
+ * used when no breadcrumb is close enough to trust (config
+ * `BREADCRUMB_GIVE_UP_RADIUS_M`). Keyed by waypoint id rather than a
+ * breadcrumb index for the same fresh-id reason as `BreadcrumbTarget`.
+ */
+interface WaypointGuideTarget {
+  readonly kind: "waypoint";
+  readonly id: string;
+  readonly coord: TourCoord;
+}
+
+/** The single "walk here next" guide target, or `null` to show nothing. */
+export type WayfindingTarget = BreadcrumbTarget | WaypointGuideTarget;
 
 export interface SceneAdapter {
   // ── Anchoring (A1) ────────────────────────────────────────────────────────
@@ -95,7 +110,7 @@ export interface SceneAdapter {
   setOrbCoords(coords: readonly (TourCoord | null)[]): void;
 
   /** The single "walk here next" guide target (plan 2026-09-17). */
-  setWayfindingTarget(target: BreadcrumbTarget | null): void;
+  setWayfindingTarget(target: WayfindingTarget | null): void;
   /**
    * World positions of every currently-ACTIVE waypoint (plan
    * 2026-09-17-breadcrumb-wayfinding). Lets the concrete adapter suppress

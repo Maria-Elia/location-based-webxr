@@ -97,7 +97,11 @@ describe("createBreadcrumbGuide", () => {
     });
     // Camera at the origin looking down -Z; a target at (0, 0, -5) is 5 m
     // directly ahead — on-screen, so it renders as the circle indicator.
-    guide.setTarget({ index: 3, coord: { lat: 0, lon: -5 } });
+    guide.setTarget({
+      kind: "breadcrumb",
+      index: 3,
+      coord: { lat: 0, lon: -5 },
+    });
     guide.update(1 / 60);
     const indicator = findIndicator(camera);
     expect(indicator?.name).toBe("wayfinding-circle");
@@ -115,8 +119,16 @@ describe("createBreadcrumbGuide", () => {
       distanceMinM: 0,
       distanceMaxM: 50,
     });
-    guide.setTarget({ index: 0, coord: { lat: 0, lon: -5 } });
-    guide.setTarget({ index: 1, coord: { lat: 0, lon: -8 } });
+    guide.setTarget({
+      kind: "breadcrumb",
+      index: 0,
+      coord: { lat: 0, lon: -5 },
+    });
+    guide.setTarget({
+      kind: "breadcrumb",
+      index: 1,
+      coord: { lat: 0, lon: -8 },
+    });
     expect(calls.filter((c) => c.startsWith("create:"))).toHaveLength(1);
     expect(calls).toContain("setGpsPoint:0,-8");
     expect(calls).toContain("markMovedExternally");
@@ -134,7 +146,11 @@ describe("createBreadcrumbGuide", () => {
       distanceMinM: 0,
       distanceMaxM: 50,
     });
-    guide.setTarget({ index: 0, coord: { lat: 0, lon: -5 } });
+    guide.setTarget({
+      kind: "breadcrumb",
+      index: 0,
+      coord: { lat: 0, lon: -5 },
+    });
     guide.update(1 / 60);
     expect(findIndicator(camera)).toBeDefined();
     guide.setTarget(null);
@@ -154,7 +170,11 @@ describe("createBreadcrumbGuide", () => {
       distanceMinM: 0,
       distanceMaxM: 50,
     });
-    guide.setTarget({ index: 0, coord: { lat: 0, lon: -5 } });
+    guide.setTarget({
+      kind: "breadcrumb",
+      index: 0,
+      coord: { lat: 0, lon: -5 },
+    });
     guide.update(1 / 60);
     expect(findIndicator(camera)).toBeDefined();
 
@@ -178,7 +198,11 @@ describe("createBreadcrumbGuide", () => {
       distanceMinM: 0,
       distanceMaxM: 50,
     });
-    guide.setTarget({ index: 0, coord: { lat: 0, lon: -5 } });
+    guide.setTarget({
+      kind: "breadcrumb",
+      index: 0,
+      coord: { lat: 0, lon: -5 },
+    });
 
     // Behind the camera — "still open, just behind me": walking past an
     // open waypoint and turning away must bring the guide back even
@@ -201,7 +225,11 @@ describe("createBreadcrumbGuide", () => {
       distanceMinM: 0,
       distanceMaxM: 50,
     });
-    guide.setTarget({ index: 0, coord: { lat: 0, lon: -5 } });
+    guide.setTarget({
+      kind: "breadcrumb",
+      index: 0,
+      coord: { lat: 0, lon: -5 },
+    });
     guide.setActiveWaypointPositions([new Vector3(0, 0, -10)]);
     guide.update(1 / 60);
     expect(findIndicator(camera)).toBeUndefined();
@@ -224,7 +252,11 @@ describe("createBreadcrumbGuide", () => {
       distanceMinM: 0,
       distanceMaxM: 50,
     });
-    guide.setTarget({ index: 0, coord: { lat: 0, lon: -5 } });
+    guide.setTarget({
+      kind: "breadcrumb",
+      index: 0,
+      coord: { lat: 0, lon: -5 },
+    });
     guide.update(1 / 60);
     guide.dispose();
     expect(calls).toContain("dispose");

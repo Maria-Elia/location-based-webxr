@@ -199,7 +199,10 @@ describe("AR viewing scene replay e2e — real Task 1 walk", () => {
       for (const id of adapter.visible) everVisible.add(id);
       maxLiveTemplates = Math.max(maxLiveTemplates, adapter.liveTemplates.size);
       maxActiveParses = Math.max(maxActiveParses, scene.debug().activeParses);
-      wayfindingIndices.push(adapter.wayfindingTarget?.index ?? null);
+      const wayfindingTarget = adapter.wayfindingTarget;
+      wayfindingIndices.push(
+        wayfindingTarget?.kind === "breadcrumb" ? wayfindingTarget.index : null,
+      );
       visitedCounts.push(
         store.getState().breadcrumbProgress.visitedIndices.length,
       );
