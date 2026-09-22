@@ -29,12 +29,14 @@ export interface PreviewStart {
 }
 
 /**
- * Where the tour starts: the author's trailhead when there is a breadcrumb,
- * otherwise the first stop. The preview starts here, and the viewing entry
- * screen measures the visitor's distance to it — one definition for both.
+ * Where the tour starts, for the viewing entry screen's distance check: the
+ * first stop, or the author's trailhead when the tour has no waypoints at
+ * all. The preview's own start pose is computed separately in
+ * `computePreviewStart`, which anchors on the trailhead first (so the walk
+ * begins at the recorded starting point) regardless of waypoints.
  */
 export function tourStartCoord(tour: Tour): TourCoord | undefined {
-  return tour.breadcrumb[0] ?? tour.waypoints[0]?.position;
+  return tour.waypoints[0]?.position ?? tour.breadcrumb[0];
 }
 
 export function computePreviewStart(tour: Tour): PreviewStart {
@@ -49,7 +51,10 @@ export function computePreviewStart(tour: Tour): PreviewStart {
     };
   }
 
-  const anchorCoord = tourStartCoord(tour)!;
+  // The preview's own anchor: the trailhead when there is one, so the walk
+  // starts at x=0,z=0 and turns toward the first stop (below) — independent
+  // of tourStartCoord's waypoint-first choice, which is for distance checks.
+  const anchorCoord = trailhead ?? firstStop!;
   const origin = { lat: anchorCoord.lat, lon: anchorCoord.lon };
   const frame = createPreviewFrame(origin);
 

@@ -433,7 +433,7 @@ p[data-testid="qr-status"] {
    exact content height. A `max-height` guess (400px for ~200px of content)
    makes the ease-out finish visually halfway and the collapse lag before
    anything moves. The clip wrapper carries `overflow: hidden` + `min-height:
-   0` so the 0fr row can shrink to nothing; the padding and divider live on
+   0` so the 0fr row can shrink to nothing; the padding lives on
    the form inside it so the collapsed body is truly 0px tall. */
 .landing-link-body {
   display: grid;
@@ -453,8 +453,7 @@ p[data-testid="qr-status"] {
 .landing-link-form {
   display: grid;
   gap: var(--space-3);
-  padding: var(--space-fluid-4);
-  border-top: 1px solid var(--border);
+  padding: 0 var(--space-fluid-4) var(--space-fluid-4);
 }
 
 /* The status line is an empty <p> until a paste fails. Its UA default 1em

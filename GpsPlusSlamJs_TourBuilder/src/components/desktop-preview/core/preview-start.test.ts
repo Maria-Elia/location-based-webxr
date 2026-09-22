@@ -79,15 +79,22 @@ describe("preview start", () => {
 });
 
 describe("tour start coordinate", () => {
-  it("is the trailhead when the tour has a breadcrumb", () => {
+  it("is the first stop even when the tour has a breadcrumb", () => {
     const trailhead: TourCoord = { lat: 48.1365, lon: 11.575 };
     const tour = tourWith({ breadcrumb: [trailhead, GATE] });
 
-    expect(tourStartCoord(tour)).toEqual(trailhead);
+    expect(tourStartCoord(tour)).toEqual(GATE);
   });
 
   it("is the first stop when there is no breadcrumb", () => {
     expect(tourStartCoord(tourWith({ breadcrumb: [] }))).toEqual(GATE);
+  });
+
+  it("is the trailhead when the tour has no waypoints", () => {
+    const trailhead: TourCoord = { lat: 48.1365, lon: 11.575 };
+    const tour = tourWith({ breadcrumb: [trailhead, GATE], waypoints: [] });
+
+    expect(tourStartCoord(tour)).toEqual(trailhead);
   });
 
   it("is undefined for a tour with neither", () => {
