@@ -398,7 +398,7 @@ describe("createAnchor — with the real framework anchor", () => {
     };
     const objectWorld = () => object.getWorldPosition(new Vector3());
     const cameraWorldY = () => camera.getWorldPosition(new Vector3()).y;
-    return { anchor, frames, setAlignment, objectWorld, cameraWorldY };
+    return { anchor, seams, frames, setAlignment, objectWorld, cameraWorldY };
   }
 
   it.each([
@@ -432,9 +432,9 @@ describe("createAnchor — with the real framework anchor", () => {
     expect(c.objectWorld().y).toBeCloseTo(c.cameraWorldY() - CAMERA_LOCAL_Y, 4);
   });
 
-  it("stays anchored through a correction too small for the anchor to apply", () => {
-    // 3 m east at 30 m: above the gate's 2 m tolerance, below the anchor's
-    // 8 m move threshold, so the anchor leaves the object where it is.
+  it("stays anchored through a small alignment correction", () => {
+    // 3 m east at 30 m: above the gate's 2 m tolerance, so the anchor follows
+    // it and must keep reporting anchored throughout.
     const c = realCase(northOf(30));
     c.frames(1);
     expect(c.anchor.isFullyAnchored).toBe(true);
@@ -443,6 +443,29 @@ describe("createAnchor — with the real framework anchor", () => {
     c.frames(3);
 
     expect(c.anchor.isFullyAnchored).toBe(true);
+  });
+
+  // The framework anchor only re-solves once its position error passes
+  // 2 m x (1 + 0.1 x distance), so a far waypoint keeps a stale position after
+  // a heading refinement (8 deg at 300 m is ~42 m, under the ~62 m gate). The
+  // trail (`toWorld`) always follows the current alignment, so the two
+  // disagree: the waypoint's zone and the wayfinding distance are wrong.
+  it("keeps a far waypoint where the current alignment puts it after a heading refinement", () => {
+    const c = realCase(northOf(300));
+    c.frames(1);
+
+    const headingRefined = new Matrix4()
+      .makeRotationY((8 * Math.PI) / 180)
+      .setPosition(0, GROUND_ALTITUDE, 0);
+    c.setAlignment(headingRefined.toArray());
+    c.frames(3);
+
+    const truth = c.seams.toWorld(northOf(300))!;
+    const horizontalError = Math.hypot(
+      c.objectWorld().x - truth.x,
+      c.objectWorld().z - truth.z,
+    );
+    expect(horizontalError).toBeLessThan(1);
   });
 
   it("re-checks placement after the anchor is re-pointed", () => {

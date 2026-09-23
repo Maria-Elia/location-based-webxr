@@ -54,6 +54,9 @@ const ANCHORED_TOLERANCE_M = 2;
 
 /** Floor changes smaller than this do not re-point the anchors. */
 const FLOOR_REFRESH_TOLERANCE_M = 0.5;
+/** The framework still multiplies this by (1 + 0.1 x distance in metres), so it
+ *  stays tiny: 0.01 is ~0.3 m at 300 m. */
+const ANCHOR_MOVE_THRESHOLD_M = 0.01;
 
 /** The subset of `createGpsAnchor` this module calls (test seam). */
 export type AnchorFactoryLike = (
@@ -189,6 +192,13 @@ export function createArSeams(deps: ArSeamsDeps): ArSeams {
       // R1 — the authored coordinate is the truth; never re-derive it from
       // where the mesh currently sits.
       skipBootstrap: true,
+      // Track the current alignment closely. The framework default gates a
+      // correction on 2 m x (1 + 0.1 x distance), so a far stop kept a stale
+      // position after a heading refinement (8 deg at 300 m = ~42 m) while the
+      // trail (`toWorld`) followed the new one. The alignment is already
+      // lerped on `arWorldGroup`, so per-frame re-solving does not visibly jump.
+      distanceThreshold: ANCHOR_MOVE_THRESHOLD_M,
+      mode: "snap-every-tick",
       getAlignmentMatrix: deps.getAlignmentMatrix,
       getGpsZeroRef: deps.getGpsZeroRef,
     });
