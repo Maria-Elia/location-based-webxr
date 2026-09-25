@@ -35,17 +35,10 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # TourBuilder's vite.config.ts imports gps-plus-slam-app-framework/storage
-      # (dab20ac, 2026-08-28), which resolves via the framework's package.json
-      # `exports` to dist/storage/index.js. Knip loads every workspace's
-      # vite.config.ts to read its plugin config, so that import must resolve
-      # even though knip never lints the framework's own dist output.
-      - name: Build AppFramework
-        run: pnpm run build:framework
-
-      # Whole-workspace knip pass. Runs as its own job (no Playwright browsers)
-      # so a finding is attributed to this step rather than masquerading as a
-      # Starter test failure.
+      # Whole-workspace knip pass. Runs as its own job so dead-code
+      # enforcement is independent of the test suite (no framework build, no
+      # Playwright browsers) and a finding is attributed to this step rather
+      # than masquerading as a Starter test failure.
       - name: Check for dead code
         run: pnpm run check:deadcode
 

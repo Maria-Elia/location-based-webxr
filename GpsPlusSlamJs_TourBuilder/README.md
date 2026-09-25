@@ -40,14 +40,6 @@ pnpm exec vitest run src/components/proximity/proximity-replay.e2e.test.ts
 pnpm exec vitest run -t "hysteresis"
 ```
 
-Two demos need generated fixtures first (throwaway placeholder assets, not
-checked in):
-
-```bash
-node scripts/make-fixtures.mjs            # component 1 — marker-*.png, clip-*.wav
-node scripts/make-ar-scene-fixtures.mjs   # component 8 — public/ar-scene/*
-```
-
 TourBuilder is deliberately **not** wired into the repo-root aggregate
 `pnpm test` or `build:site`; run its gate from here.
 
@@ -80,16 +72,12 @@ Supporting directories (not runnable components):
 - `src/store/` — lives at the `src/` root, not under `src/components/`. Dependencies
   flow **components → store** only (enforced by
   `config/.dependency-cruiser.cjs`).
-- `scripts/` — fixture generators (`make-fixtures.mjs`,
-  `make-ar-scene-fixtures.mjs`) and demo-track extractors that turn a
-  `recordings/*.zip` walk into the `demo-track.json` used by the map and
-  authoring demos.
-- `public/` — generated throwaway fixtures. A real tour ships GLB/MP3/OGG.
+- `public/` — placeholder demo fixtures. A real tour ships GLB/MP3/OGG.
 
 ## Package layout
 
 All source lives under `src/` (matching every other package in the repo); only
-config, `scripts/`, `public/` and the gallery `index.html` sit at the package
+config, `public/` and the gallery `index.html` sit at the package
 root.
 
 ```
