@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import { describe, expect, it, beforeEach, vi } from "vitest";
 import type * as StorageModule from "gps-plus-slam-app-framework/storage";
+import type { rasterizeQrSvg as RasterizeQrSvgFn } from "../../components/packaging/view/export-qr-image.js";
 
-const shareOrDownloadBlob = vi.fn(() =>
-  Promise.resolve({ route: "download", delivered: true }),
+const shareOrDownloadBlob = vi.fn<typeof StorageModule.shareOrDownloadBlob>(
+  () => Promise.resolve({ route: "download" as const, delivered: true }),
 );
 vi.mock("gps-plus-slam-app-framework/storage", async () => {
   const actual = await vi.importActual<typeof StorageModule>(
@@ -12,7 +13,7 @@ vi.mock("gps-plus-slam-app-framework/storage", async () => {
   return {
     ...actual,
     normalizeShareUrl: (raw: string) => raw,
-    shareOrDownloadBlob: (...args: unknown[]) => shareOrDownloadBlob(...args),
+    shareOrDownloadBlob,
   };
 });
 
@@ -26,11 +27,11 @@ vi.mock("../../components/packaging/view/qr-view.js", () => ({
   }),
 }));
 
-const rasterizeQrSvg = vi.fn(() =>
-  Promise.resolve(new Blob(["fake-image"], { type: "image/png" })),
+const rasterizeQrSvg = vi.fn<typeof RasterizeQrSvgFn>(
+  () => Promise.resolve(new Blob(["fake-image"], { type: "image/png" })),
 );
 vi.mock("../../components/packaging/view/export-qr-image.js", () => ({
-  rasterizeQrSvg: (...args: unknown[]) => rasterizeQrSvg(...args),
+  rasterizeQrSvg,
 }));
 
 import { mountPackAndSharePanel } from "./pack-and-share-panel.js";
